@@ -27,7 +27,7 @@ from .ai.chat import OpenAIChat
 from .ai.transcriber import WhisperTranscriber
 from .ai.tts import ElevenLabsTTS
 from .config.settings import get_settings, Settings
-from .utils.helpers import format_duration, progress_spinner, truncate_text
+from .utils.helpers import format_duration, truncate_text
 
 # Rich console for beautiful output
 console = Console()
@@ -47,19 +47,29 @@ def setup_logging(level: str = "INFO", log_file: Optional[str] = None) -> None:
     warnings.filterwarnings("ignore", message=".*torch.load.*")
     warnings.filterwarnings("ignore", category=FutureWarning, module="torch")
     
-    # Configure logging format
-    log_format = "%(message)s"
+    # Configure logging format for better readability
+    log_format = "%(asctime)s %(levelname)s %(message)s"
     date_format = "%H:%M:%S"
     
-    # Set up rich handler for console output
+    # Set up rich handler for console output with improved formatting
     rich_handler = RichHandler(
         console=console,
         show_time=True,
         show_path=False,
         markup=True,
         rich_tracebacks=True,
+        show_level=True,
     )
-    rich_handler.setFormatter(logging.Formatter(log_format, date_format))
+    
+    # Custom formatter for cleaner output
+    class CleanFormatter(logging.Formatter):
+        def format(self, record):
+            # Remove module name from log messages for cleaner output
+            if hasattr(record, 'name') and record.name != 'root':
+                record.msg = f"[dim]{record.name}[/dim] {record.msg}"
+            return super().format(record)
+    
+    rich_handler.setFormatter(CleanFormatter(log_format, date_format))
     
     # Configure root logger
     logging.basicConfig(
@@ -69,13 +79,18 @@ def setup_logging(level: str = "INFO", log_file: Optional[str] = None) -> None:
         handlers=[rich_handler],
     )
     
-    # Add file handler if specified
+    # Add file handler if specified with full details
     if log_file:
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         ))
         logging.getLogger().addHandler(file_handler)
+    
+    # Set specific logger levels for better control
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 def handle_exceptions(func):
@@ -178,12 +193,12 @@ class InteractiveSession:
     
     def _get_input_choice(self) -> str:
         """Get user's choice for input method."""
-        console.print("\n[cyan]Choose input method:[/cyan]")
-        console.print("  [bold]v[/bold] - Voice recording")
-        console.print("  [bold]t[/bold] - Text input") 
-        console.print("  [bold]h[/bold] - Help")
-        console.print("  [bold]c[/bold] - Clear conversation")
-        console.print("  [bold]q[/bold] - Quit")
+        console.print("\n[cyan]🎯 Choose input method:[/cyan]")
+        console.print("  [bold]v[/bold] - 🎤 Voice recording")
+        console.print("  [bold]t[/bold] - ✏️  Text input") 
+        console.print("  [bold]h[/bold] - ❓ Help")
+        console.print("  [bold]c[/bold] - 🗑️  Clear conversation")
+        console.print("  [bold]q[/bold] - 🚪 Quit")
         
         choice = console.input("\n[cyan]Your choice[/cyan] [dim](v/t/h/c/q)[/dim]: ").strip().lower()
         
@@ -200,13 +215,13 @@ class InteractiveSession:
     def _record_and_transcribe(self) -> Optional[str]:
         """Record audio and transcribe to text."""
         try:
-            console.print("[green]🔴 Recording... Press ENTER to stop[/green]")
+            console.print("[green]🔴 Recording... Press Enter to stop[/green]")
             
             # Start recording in background
             self.recorder.start_recording()
             
-            # Wait for user to stop
-            input()
+            # Wait for user to stop with styled prompt
+            console.input("[dim]⏹️  Stop recording[/dim]")
             
             # Stop recording and get audio data
             audio_data = self.recorder.stop_recording()
@@ -218,9 +233,10 @@ class InteractiveSession:
             duration = len(audio_data) / self.settings.audio.sample_rate
             console.print(f"[green]✓[/green] Recorded {format_duration(duration)} of audio")
             
-            # Transcribe audio
-            with progress_spinner("Transcribing audio..."):
-                result = self.transcriber.transcribe_array(audio_data)
+            # Transcribe audio - replace spinner with simple message
+            console.print("[cyan]🔄 Transcribing audio...[/cyan]")
+            result = self.transcriber.transcribe_array(audio_data)
+            console.print("[green]✓[/green] Transcription completed")
             
             user_text = result["text"].strip()
             if not user_text:
@@ -237,7 +253,7 @@ class InteractiveSession:
     def _get_text_input(self) -> Optional[str]:
         """Get text input from user."""
         try:
-            user_text = console.input("\n[cyan]Type your message:[/cyan] ").strip()
+            user_text = console.input("\n[cyan]✏️  Type your message:[/cyan] ").strip()
             return user_text if user_text else None
         except (EOFError, KeyboardInterrupt):
             return None
@@ -245,8 +261,10 @@ class InteractiveSession:
     def _process_with_ai(self, user_text: str) -> Optional[str]:
         """Process user input with AI."""
         try:
-            with progress_spinner("AI is thinking..."):
-                ai_response = self.chat.chat(user_text)
+            # Replace spinner with simple message
+            console.print("[cyan]🤔 AI is thinking...[/cyan]")
+            ai_response = self.chat.chat(user_text)
+            console.print("[green]✓[/green] AI response generated")
             
             console.print(f"[magenta]AI:[/magenta] {ai_response}")
             return ai_response
@@ -258,8 +276,10 @@ class InteractiveSession:
     def _synthesize_and_play(self, text: str) -> None:
         """Convert text to speech and play it."""
         try:
-            with progress_spinner("Generating speech..."):
-                audio_bytes = self.tts.synthesize(text)
+            # Replace spinner with simple message
+            console.print("[cyan]🎵 Generating speech...[/cyan]")
+            audio_bytes = self.tts.synthesize(text)
+            console.print("[green]✓[/green] Speech generated")
             
             console.print("[green]🔊 Playing AI response...[/green]")
             self.player.play_with_elevenlabs(audio_bytes)
@@ -271,14 +291,14 @@ class InteractiveSession:
         """Show help information."""
         help_panel = Panel.fit(
             "[bold]TranscribeTalk Commands:[/bold]\n\n"
-            "[cyan]v[/cyan] - Record voice input\n"
-            "[cyan]t[/cyan] - Type text input\n"
-            "[cyan]c[/cyan] - Clear conversation history\n"
-            "[cyan]h[/cyan] - Show this help\n"
-            "[cyan]q[/cyan] - Quit the session\n\n"
+            "[cyan]v[/cyan] - 🎤 Record voice input\n"
+            "[cyan]t[/cyan] - ✏️  Type text input\n"
+            "[cyan]c[/cyan] - 🗑️  Clear conversation history\n"
+            "[cyan]h[/cyan] - ❓ Show this help\n"
+            "[cyan]q[/cyan] - 🚪 Quit the session\n\n"
             "[bold]Voice Recording:[/bold]\n"
-            "• Press ENTER to start recording\n"
-            "• Press ENTER again to stop\n"
+            "• Recording starts immediately when you choose voice input\n"
+            "• Press Enter to stop recording\n"
             "• Speak clearly into your microphone\n\n"
             "[bold]Configuration:[/bold]\n"
             f"• Whisper model: {self.settings.whisper.model}\n"
@@ -483,8 +503,9 @@ def once(ctx: click.Context, input: Optional[str], output: Optional[str], format
         # Get audio data
         if input:
             console.print(f"[green]✓[/green] Input file: {input}")
-            with progress_spinner("Processing audio file..."):
-                result = transcriber.transcribe_file(input)
+            console.print("[cyan]🔄 Processing audio file...[/cyan]")
+            result = transcriber.transcribe_file(input)
+            console.print("[green]✓[/green] Audio file processed")
             audio_data = None
         else:
             console.print("[yellow]Recording from microphone...[/yellow]")
@@ -499,8 +520,9 @@ def once(ctx: click.Context, input: Optional[str], output: Optional[str], format
             duration = len(audio_data) / settings.audio.sample_rate
             console.print(f"[green]✓[/green] Recorded {format_duration(duration)} of audio")
             
-            with progress_spinner("Transcribing audio..."):
-                result = transcriber.transcribe_array(audio_data)
+            console.print("[cyan]🔄 Transcribing audio...[/cyan]")
+            result = transcriber.transcribe_array(audio_data)
+            console.print("[green]✓[/green] Transcription completed")
         
         user_text = result["text"].strip()
         if not user_text:
@@ -510,8 +532,9 @@ def once(ctx: click.Context, input: Optional[str], output: Optional[str], format
         console.print(f"[blue]Transcribed:[/blue] {user_text}")
         
         # Process with AI
-        with progress_spinner("Processing with AI..."):
-            ai_response = chat.chat(user_text, remember_conversation=False)
+        console.print("[cyan]🤔 Processing with AI...[/cyan]")
+        ai_response = chat.chat(user_text, remember_conversation=False)
+        console.print("[green]✓[/green] AI response generated")
         
         console.print(f"[magenta]AI Response:[/magenta] {ai_response}")
         
@@ -537,8 +560,9 @@ def once(ctx: click.Context, input: Optional[str], output: Optional[str], format
         
         # Text-to-speech (unless disabled)
         if not no_tts:
-            with progress_spinner("Generating speech..."):
-                audio_bytes = tts.synthesize(ai_response)
+            console.print("[cyan]🎵 Generating speech...[/cyan]")
+            audio_bytes = tts.synthesize(ai_response)
+            console.print("[green]✓[/green] Speech generated")
             
             console.print("[green]🔊 Playing AI response...[/green]")
             player.play_with_elevenlabs(audio_bytes)

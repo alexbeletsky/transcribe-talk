@@ -5,7 +5,6 @@ This module provides common utility functions used across the application:
 - Temporary file management
 - Audio format conversion
 - Text processing and formatting  
-- Progress indicators and status display
 - File I/O helpers
 """
 
@@ -19,11 +18,8 @@ from typing import Generator, Optional, Union
 
 import numpy as np
 import scipy.io.wavfile
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 class TempFileManager:
@@ -349,30 +345,6 @@ def normalize_audio(audio_data: np.ndarray, target_type: type = np.int16) -> np.
     except Exception as e:
         logger.error(f"Error normalizing audio: {e}")
         return audio_data
-
-
-@contextmanager
-def progress_spinner(description: str = "Processing...") -> Generator[None, None, None]:
-    """
-    Context manager for progress spinner.
-    
-    Args:
-        description: Description to display with spinner
-        
-    Yields:
-        None
-    """
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        transient=True,
-    ) as progress:
-        task = progress.add_task(description, total=None)
-        try:
-            yield
-        finally:
-            progress.remove_task(task)
 
 
 def ensure_directory(path: Union[str, Path]) -> Path:
