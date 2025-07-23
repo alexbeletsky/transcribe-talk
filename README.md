@@ -20,26 +20,33 @@ TranscribeTalk transforms your voice into AI conversations by:
 git clone https://github.com/transcribetalk/transcribe-talk.git
 cd transcribe-talk
 
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On macOS/Linux
+# or
+# .venv\Scripts\activate  # On Windows
+
 # Install in development mode
 pip install -e .
 ```
 
 ### Configuration
 
-1. Copy the example environment file:
+1. Create and configure your environment file:
 
 ```bash
-cp .env.example .env
-```
+# Create .env file
+touch .env
 
-2. Edit `.env` and add your API keys:
-
-```bash
+# Edit .env and add your API keys:
 # Get your API keys from:
 # OpenAI: https://platform.openai.com/api-keys
 # ElevenLabs: https://elevenlabs.io/
+
+cat > .env << 'EOF'
 OPENAI_API_KEY=your_openai_api_key_here
 ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+EOF
 ```
 
 3. Validate your configuration:
@@ -134,6 +141,11 @@ transcribe-talk/
 ### Development Setup
 
 ```bash
+# Activate virtual environment
+source .venv/bin/activate  # macOS/Linux
+# or
+# .venv\Scripts\activate  # Windows
+
 # Install development dependencies
 pip install -e ".[dev]"
 
@@ -193,6 +205,41 @@ mypy src/
 - [ ] Testing infrastructure
 - [ ] Documentation completion
 - [ ] Distribution packaging
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Python 3.13 Compatibility Issues:**
+
+```bash
+# If you encounter dependency installation errors, try:
+pip cache purge
+pip install --upgrade pip
+pip install -e .
+```
+
+**Virtual Environment Issues:**
+
+```bash
+# Ensure virtual environment is activated
+source .venv/bin/activate  # macOS/Linux
+# or
+.venv\Scripts\activate     # Windows
+
+# Verify activation
+which python  # Should show .venv/bin/python
+```
+
+**Configuration Validation Errors:**
+
+```bash
+# Check if .env file exists and has correct format
+cat .env
+
+# Ensure API keys are properly set
+transcribe-talk config validate
+```
 
 ## 🤝 Contributing
 
