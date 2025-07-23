@@ -200,9 +200,6 @@ class InteractiveSession:
     def _record_and_transcribe(self) -> Optional[str]:
         """Record audio and transcribe to text."""
         try:
-            console.print("\n[green]🎤 Press ENTER to start recording...[/green]")
-            input()  # Wait for user to press Enter
-            
             console.print("[green]🔴 Recording... Press ENTER to stop[/green]")
             
             # Start recording in background
