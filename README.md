@@ -58,8 +58,11 @@ transcribe-talk config validate
 ### Usage
 
 ```bash
-# Interactive mode - Full voice conversations
-transcribe-talk interactive
+# Interactive mode (default) - Just run without any commands
+transcribe-talk
+
+# Interactive mode with options
+transcribe-talk --model large --voice <voice-id> --tokens 300
 
 # One-shot mode - Process single audio file or recording
 transcribe-talk once

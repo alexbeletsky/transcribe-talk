@@ -10,6 +10,7 @@ import signal
 import sys
 import threading
 import time
+import warnings
 from functools import wraps
 from pathlib import Path
 from typing import Optional
@@ -34,12 +35,18 @@ console = Console()
 
 def setup_logging(level: str = "INFO", log_file: Optional[str] = None) -> None:
     """
-    Set up logging configuration.
+    Set up logging configuration and suppress common warnings.
     
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_file: Optional log file path
     """
+    # Suppress common warnings that don't affect functionality
+    warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
+    warnings.filterwarnings("ignore", category=UserWarning, module="whisper")
+    warnings.filterwarnings("ignore", message=".*torch.load.*")
+    warnings.filterwarnings("ignore", category=FutureWarning, module="torch")
+    
     # Configure logging format
     log_format = "%(message)s"
     date_format = "%H:%M:%S"
@@ -120,7 +127,7 @@ class InteractiveSession:
         # Welcome message
         welcome_panel = Panel.fit(
             "[bold blue]Welcome to TranscribeTalk![/bold blue]\n\n"
-            "[white]Press [bold]SPACE[/bold] to start recording, [bold]SPACE[/bold] again to stop.\n"
+            "[white]Press [bold]ENTER[/bold] to start/stop recording.\n"
             "Press [bold]Ctrl+C[/bold] to exit.\n"
             "Type 'help' for more commands.[/white]",
             title="Interactive Mode",
@@ -295,80 +302,9 @@ class InteractiveSession:
             console.print(f"[yellow]Cleanup warning: {e}[/yellow]")
 
 
-@click.group()
-@click.version_option(version="0.1.0", prog_name="transcribe-talk")
-@click.option(
-    "--log-level",
-    default="INFO",
-    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
-    help="Set logging level"
-)
-@click.option(
-    "--log-file",
-    type=click.Path(),
-    help="Log file path"
-)
-@click.option(
-    "--debug",
-    is_flag=True,
-    help="Enable debug mode"
-)
-@click.pass_context
-def cli(ctx: click.Context, log_level: str, log_file: Optional[str], debug: bool) -> None:
-    """
-    TranscribeTalk - Voice-to-Voice AI Conversations
-    
-    A CLI application for voice-to-voice AI conversations using speech-to-text,
-    AI processing, and text-to-speech.
-    
-    Examples:
-        transcribe-talk                    # Interactive mode
-        transcribe-talk once              # One-shot mode
-        transcribe-talk config            # Configuration management
-    """
-    # Ensure context object exists
-    ctx.ensure_object(dict)
-    
-    # Set up logging
-    setup_logging(log_level, log_file)
-    
-    # Load settings (will be loaded when needed)
-    ctx.obj['settings'] = None
-    logging.info("CLI initialized successfully")
-    
-    # Set debug mode
-    if debug:
-        ctx.obj['debug'] = True
-        logging.getLogger().setLevel(logging.DEBUG)
-        logging.debug("Debug mode enabled")
-
-
-@cli.command()
-@click.option(
-    "--model",
-    default="base",
-    type=click.Choice(["tiny", "base", "small", "medium", "large"]),
-    help="Whisper model to use for transcription"
-)
-@click.option(
-    "--voice",
-    help="ElevenLabs voice ID for TTS"
-)
-@click.option(
-    "--tokens",
-    default=200,
-    type=int,
-    help="Maximum tokens in AI response"
-)
-@click.pass_context
-@handle_exceptions
-def interactive(ctx: click.Context, model: str, voice: Optional[str], tokens: int) -> None:
-    """
-    Start interactive voice conversation mode.
-    
-    This is the default mode that allows you to have a continuous
-    voice conversation with the AI assistant.
-    """
+# Make interactive mode available as both a command and the default
+def start_interactive_mode(ctx: click.Context, model: str, voice: Optional[str], tokens: int) -> None:
+    """Start interactive voice conversation mode."""
     console.print("[bold blue]TranscribeTalk Interactive Mode[/bold blue]")
     console.print("[dim]Loading components...[/dim]\n")
     
@@ -395,6 +331,104 @@ def interactive(ctx: click.Context, model: str, voice: Optional[str], tokens: in
     # Start interactive session
     session = InteractiveSession(settings)
     session.start()
+
+
+@click.group(invoke_without_command=True)
+@click.version_option(version="0.1.0", prog_name="transcribe-talk")
+@click.option(
+    "--log-level",
+    default="INFO",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
+    help="Set logging level"
+)
+@click.option(
+    "--log-file",
+    type=click.Path(),
+    help="Log file path"
+)
+@click.option(
+    "--debug",
+    is_flag=True,
+    help="Enable debug mode"
+)
+@click.option(
+    "--model",
+    default="base",
+    type=click.Choice(["tiny", "base", "small", "medium", "large"]),
+    help="Whisper model to use for transcription"
+)
+@click.option(
+    "--voice",
+    help="ElevenLabs voice ID for TTS"
+)
+@click.option(
+    "--tokens",
+    default=200,
+    type=int,
+    help="Maximum tokens in AI response"
+)
+@click.pass_context
+@handle_exceptions
+def cli(ctx: click.Context, log_level: str, log_file: Optional[str], debug: bool, 
+        model: str, voice: Optional[str], tokens: int) -> None:
+    """
+    TranscribeTalk - Voice-to-Voice AI Conversations
+    
+    A CLI application for voice-to-voice AI conversations using speech-to-text,
+    AI processing, and text-to-speech.
+    
+    Examples:
+        transcribe-talk                    # Interactive mode (default)
+        transcribe-talk once              # One-shot mode
+        transcribe-talk config            # Configuration management
+    """
+    # Ensure context object exists
+    ctx.ensure_object(dict)
+    
+    # Set up logging and warning suppression
+    setup_logging(log_level, log_file)
+    
+    # Load settings (will be loaded when needed)
+    ctx.obj['settings'] = None
+    logging.info("CLI initialized successfully")
+    
+    # Set debug mode
+    if debug:
+        ctx.obj['debug'] = True
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.debug("Debug mode enabled")
+    
+    # If no command is specified, run interactive mode
+    if ctx.invoked_subcommand is None:
+        start_interactive_mode(ctx, model, voice, tokens)
+
+
+@cli.command()
+@click.option(
+    "--model",
+    default="base",
+    type=click.Choice(["tiny", "base", "small", "medium", "large"]),
+    help="Whisper model to use for transcription"
+)
+@click.option(
+    "--voice",
+    help="ElevenLabs voice ID for TTS"
+)
+@click.option(
+    "--tokens",
+    default=200,
+    type=int,
+    help="Maximum tokens in AI response"
+)
+@click.pass_context
+@handle_exceptions
+def interactive(ctx: click.Context, model: str, voice: Optional[str], tokens: int) -> None:
+    """
+    Start interactive voice conversation mode.
+    
+    This allows you to have a continuous voice conversation with the AI assistant.
+    """
+    start_interactive_mode(ctx, model, voice, tokens)
 
 
 @cli.command()
