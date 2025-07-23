@@ -58,18 +58,42 @@ transcribe-talk config validate
 ### Usage
 
 ```bash
-# Interactive mode (default)
-transcribe-talk
+# Interactive mode - Full voice conversations
+transcribe-talk interactive
 
-# One-shot mode
+# One-shot mode - Process single audio file or recording
 transcribe-talk once
+
+# One-shot with file input
+transcribe-talk once --input audio.wav --output result.txt
 
 # Show configuration
 transcribe-talk config show
 
+# Validate configuration
+transcribe-talk config validate
+
 # Get help
 transcribe-talk --help
 ```
+
+#### Interactive Mode Features
+
+- **Voice recording** with start/stop controls
+- **Real-time transcription** using Whisper
+- **AI conversation** with memory and context
+- **Text-to-speech** playback of responses
+- **Text input** option for accessibility
+- **Conversation management** (clear history, help)
+- **Beautiful terminal interface** with Rich
+
+#### One-Shot Mode Features
+
+- **File processing** or live recording
+- **Batch processing** capabilities
+- **Multiple output formats** (text, JSON)
+- **Optional TTS** (can be disabled with `--no-tts`)
+- **Automation friendly** for scripts and workflows
 
 ## 📋 Features
 
@@ -188,17 +212,19 @@ mypy src/
 - [x] Basic CLI framework
 - [x] Logging and error handling
 
-**Phase 2 In Progress** 🔄
+**Phase 2 Complete** ✅
 
-- [ ] Audio module migration
-- [ ] AI services integration
-- [ ] Core functionality implementation
+- [x] Audio module migration
+- [x] AI services integration
+- [x] Core functionality implementation
+- [x] Interactive mode implementation
+- [x] One-shot mode implementation
 
-**Phase 3 Planned** 📋
+**Phase 3 Complete** ✅
 
-- [ ] Enhanced CLI experience
-- [ ] Interactive mode implementation
-- [ ] One-shot mode implementation
+- [x] Enhanced CLI experience
+- [x] Full voice-to-voice conversation workflow
+- [x] Professional user interface with Rich
 
 **Phase 4 Planned** 📋
 
