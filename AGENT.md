@@ -1,4 +1,4 @@
-# Agentic Features: Technical Vision & Development Plan (v3)
+# Agentic Features: Technical Vision & Development Plan (v4)
 
 This document outlines the technical vision and phased development plan for evolving TranscribeTalk from a voice-to-voice application into a conversational AI agent, inspired by the architecture of `gemini-cli`.
 
@@ -56,7 +56,7 @@ The new architecture is built around a central **`Agent`** class that orchestrat
 
 #### A. Agent (Orchestrator)
 
-- **Location:** `src/transcribe_talk/cli.py`
+- **Location:** `src/transcribe_talk/ai/agent.py`
 - **Responsibilities:**
   - Initialize and manage core components: `PromptEngine`, `ChatService`, `Turn`, `ToolScheduler`, and `ConversationHistory`.
   - Capture and transcribe user voice input via `src/transcribe_talk/audio/recorder.py` and `src/transcribe_talk/ai/transcriber.py`.
@@ -122,19 +122,19 @@ The new architecture is built around a central **`Agent`** class that orchestrat
 
 ## 3. Phased Development Plan
 
-### Phase 1: Foundational Architecture (In Progress)
+### Phase 1: Foundational Architecture (✅ COMPLETED)
 
 _Goal: Scaffold the Agent/Turn architecture, clean up legacy AI modules, and prepare for tool integration._
 
-1.  **Clean up legacy code**: Move or deprecate existing `chat.py`, `transcriber.py`, and `tts.py` into a `src/transcribe_talk/ai/ai_legacy/` folder, while preserving `src/transcribe_talk/audio/recorder.py`, `src/transcribe_talk/audio/player.py`, and the TTS pipeline in `src/transcribe_talk/ai/tts.py` intact for voice I/O.
-2.  **Create `ToolRegistry`** in `src/transcribe_talk/tools/tool_registry.py`.
-3.  **Create `ConversationHistory`** in `src/transcribe_talk/ai/history.py`.
-4.  **Create `Turn` class** in `src/transcribe_talk/ai/turn.py`.
-5.  **Create `Agent` class** in `src/transcribe_talk/ai/agent.py`.
-6.  **Refactor `cli.py`** to call `Agent.execute_turn()` instead of legacy chat logic.
-7.  **Validate** no regressions against existing voice-to-voice flows.
+1.  **✅ Clean up legacy code**: Moved existing `chat.py`, `transcriber.py`, and `tts.py` into a `src/transcribe_talk/ai/ai_legacy/` folder, while preserving `src/transcribe_talk/audio/recorder.py`, `src/transcribe_talk/audio/player.py`, and the TTS pipeline in `src/transcribe_talk/ai/tts.py` intact for voice I/O.
+2.  **✅ Create `ToolRegistry`** in `src/transcribe_talk/tools/tool_registry.py`.
+3.  **✅ Create `ConversationHistory`** in `src/transcribe_talk/ai/history.py`.
+4.  **✅ Create `Turn` class** in `src/transcribe_talk/ai/turn.py`.
+5.  **✅ Create `Agent` class** in `src/transcribe_talk/ai/agent.py`.
+6.  **✅ Refactor `cli.py`** to call `Agent.execute_turn()` instead of legacy chat logic.
+7.  **✅ Validate** no regressions against existing voice-to-voice flows.
 
-### Phase 2: MVP Agentic Loop
+### Phase 2: MVP Agentic Loop (In Progress)
 
 _First Tool (MVP):_ `list_directory` – enables the agent to list directory contents.
 
@@ -157,11 +157,11 @@ _Goal: Deliver a minimal, robust agentic loop with tool integration, safe defaul
     - Output logs to console and optionally to file
 6.  Build unit & integration tests:
     - Mock OpenAI responses for direct-answer vs. tool-call flows
-    - End-to-end test for “What files are here?” using `--auto-confirm`
+    - End-to-end test for "What files are here?" using `--auto-confirm`
 7.  Validate MVP end-to-end:
     - Demonstrate `transcribe-talk --auto-confirm "What files are here?"` returns correct directory listing
 
-### Phase 3: Expanding Capabilities
+### Phase 3: Expanding Capabilities (Pending)
 
 _Goal: Make the agent more powerful and intelligent._
 
@@ -169,38 +169,72 @@ _Goal: Make the agent more powerful and intelligent._
 2.  **Implement Long-Term Memory:** Add support for `CONTEXT.md` to the `PromptEngine`.
 3.  **Implement `save_memory` Tool:** Create a tool that allows the agent to write to `CONTEXT.md`.
 
-### Phase 4: Advanced Hardening
+### Phase 4: Advanced Hardening (Pending)
 
 _Goal: Make the agent more robust and efficient, like `gemini-cli`._
 
 1.  **Implement Loop Detection:** Create a simple service that tracks tool calls within a single `Turn`. If the same tool is called with the same arguments multiple times, break the loop and report an error.
 2.  **(Stretch Goal) Implement Chat Compression:** For very long conversations, implement a mechanism in the `Agent` class to summarize the `ConversationHistory`, similar to `gemini-cli`'s `tryCompressChat`.
 
-## Final Detailed Plan
+## Implementation Details
 
-1.  Phase 1: Foundational Architecture (Pending)
+### Key Architectural Improvements Implemented
 
-    - Clean up legacy AI modules into `src/transcribe_talk/ai/ai_legacy/`
-    - Scaffold core classes: `ToolRegistry`, `ConversationHistory`, `Turn`, and `Agent`
-    - Refactor `cli.py` to use `Agent.execute_turn()` and validate no regressions
+1. **Event-Driven Architecture**: The new Turn class yields structured events (ContentEvent, ToolCallRequestEvent, etc.) for better separation of concerns.
 
-2.  Phase 2: MVP Agentic Loop (Pending)
+2. **Async/Await Support**: All core components support asynchronous operations for better performance and responsiveness.
 
-    - CLI scaffold with `--auto-confirm` and `--dry-run` flags
-    - Implement `list_directory` tool and register in `ToolRegistry`
-    - Build async `Turn.run()` loop supporting interactive and unattended modes
-    - Introduce safety guardrails: max tool-call depth, per-tool timeouts, abort logic
-    - Add logging & telemetry for timestamps, token usage, and tool calls
-    - Write unit and end-to-end tests; demo `transcribe-talk --auto-confirm "What files are here?"`
+3. **Type Safety**: Comprehensive type hints and Pydantic models for configuration validation.
 
-3.  Phase 3: Expanding Capabilities (Pending)
+4. **Modular Design**: Clear separation between:
+   - Voice I/O (audio module)
+   - AI Services (chat_service, prompt_engine, turn)
+   - Tool Management (tool_registry, tool_scheduler)
+   - Conversation State (history, agent)
 
-    - Develop `read_file` and `write_file` tools with rich confirmation
-    - Create `save_memory` tool to update `CONTEXT.md`
-    - Enhance `PromptEngine` to incorporate long-term memory
+### Current Project Structure
 
-4.  Phase 4: Advanced Hardening (Pending)
-    - Implement loop detection to prevent runaway cycles
-    - Add chat compression to summarize conversation history
+```
+transcribe-talk/
+├── src/transcribe_talk/
+│   ├── ai/
+│   │   ├── ai_legacy/        # Legacy AI modules (preserved)
+│   │   │   ├── chat.py
+│   │   │   └── transcriber.py
+│   │   ├── agent.py          # New Agent orchestrator
+│   │   ├── chat_service.py   # New ChatService for OpenAI API
+│   │   ├── events.py         # Event definitions
+│   │   ├── history.py        # ConversationHistory manager
+│   │   ├── prompt_engine.py  # PromptEngine for context assembly
+│   │   ├── tool_scheduler.py # ToolScheduler for tool execution
+│   │   ├── transcriber.py    # Refactored Whisper transcriber
+│   │   ├── tts.py           # Preserved ElevenLabs TTS
+│   │   └── turn.py          # Turn event generator
+│   ├── audio/               # Audio I/O (preserved)
+│   │   ├── player.py
+│   │   └── recorder.py
+│   ├── tools/               # Tool infrastructure
+│   │   └── tool_registry.py
+│   ├── config/              # Configuration management
+│   │   └── settings.py
+│   ├── utils/               # Utilities
+│   │   └── helpers.py
+│   └── cli.py              # Refactored CLI with Agent integration
+```
 
-This revised plan is far more detailed and provides a much stronger foundation for building a truly capable agent.
+### Migration Notes
+
+1. **Backward Compatibility**: The existing voice-to-voice functionality is fully preserved while adding the new agentic capabilities.
+
+2. **Legacy Code**: Original AI modules are preserved in `ai_legacy/` for reference and potential rollback.
+
+3. **Configuration**: The existing configuration system (Settings) is extended to support new agent-related settings.
+
+4. **Testing**: The project maintains executable state throughout the migration with no breaking changes to existing functionality.
+
+## Next Steps
+
+1. Continue with Phase 2 implementation for the MVP agentic loop
+2. Add comprehensive unit and integration tests
+3. Implement the first tool (`list_directory`) and validate end-to-end
+4. Add documentation for the new architecture and API

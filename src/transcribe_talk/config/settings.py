@@ -37,12 +37,22 @@ class WhisperConfig(BaseModel):
     """Whisper speech-to-text configuration."""
     
     model: str = Field(default="base", description="Whisper model to use")
+    language: Optional[str] = Field(default=None, description="Language code (e.g., 'en', 'es'). None for auto-detect")
+    task: str = Field(default="transcribe", description="Task to perform: 'transcribe' or 'translate'")
+    temperature: float = Field(default=0.0, description="Temperature for sampling")
+    initial_prompt: Optional[str] = Field(default=None, description="Initial prompt to condition the model")
     
     @validator('model')
     def validate_model(cls, v):
         valid_models = ["tiny", "base", "small", "medium", "large"]
         if v not in valid_models:
             raise ValueError(f'Model must be one of: {", ".join(valid_models)}')
+        return v
+    
+    @validator('task')
+    def validate_task(cls, v):
+        if v not in ["transcribe", "translate"]:
+            raise ValueError("Task must be 'transcribe' or 'translate'")
         return v
 
 
@@ -53,6 +63,8 @@ class OpenAIConfig(BaseModel):
     model: str = Field(default="gpt-4o-mini", description="OpenAI model to use")
     max_tokens: int = Field(default=200, description="Maximum tokens in response")
     temperature: float = Field(default=0.7, description="Response creativity (0.0-1.0)")
+    timeout: float = Field(default=60.0, description="Request timeout in seconds")
+    max_retries: int = Field(default=3, description="Maximum number of retries")
     
     @validator('api_key')
     def validate_api_key(cls, v):

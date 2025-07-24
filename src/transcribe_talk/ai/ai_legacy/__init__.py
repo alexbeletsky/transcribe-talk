@@ -1,0 +1,1 @@
+"""Legacy AI modules preserved for backward compatibility."""

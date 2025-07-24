@@ -48,301 +48,123 @@ class WhisperTranscriber:
         self.model_name = whisper_config.model
         self._model = None
         
-        logger.info(f"Whisper transcriber initialized with model: {self.model_name}")
+        logger.info(f"WhisperTranscriber initialized with model: {self.model_name}")
     
     @property
     def model(self) -> whisper.Whisper:
-        """
-        Get the loaded Whisper model, loading it if necessary.
-        
-        Returns:
-            whisper.Whisper: Loaded Whisper model
-        """
+        """Lazy load and cache the Whisper model."""
         if self._model is None:
-            self._load_model()
+            logger.info(f"Loading Whisper model: {self.model_name}")
+            self._model = whisper.load_model(self.model_name)
+            logger.info(f"Whisper model loaded successfully")
         return self._model
     
-    def _load_model(self) -> None:
-        """Load the Whisper model."""
-        logger.info(f"Loading Whisper model: {self.model_name}")
-        
-        try:
-            self._model = whisper.load_model(self.model_name)
-            logger.info(f"Whisper model '{self.model_name}' loaded successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to load Whisper model '{self.model_name}': {e}")
-            raise
-    
-    def transcribe_array(
-        self, 
-        audio_data: np.ndarray, 
-        language: Optional[str] = None,
-        sample_rate: Optional[int] = None
-    ) -> Dict[str, str]:
-        """
-        Transcribe audio from a numpy array.
-        
-        Args:
-            audio_data: Audio data as numpy array
-            language: Optional language code (e.g., 'en', 'es'). If None, auto-detect
-            sample_rate: Sample rate of audio data. If None, uses config default
-            
-        Returns:
-            dict: Transcription result with 'text' and 'language' keys
-        """
-        if sample_rate is None:
-            sample_rate = self.audio_config.sample_rate
-        
-        logger.info(f"Transcribing audio array: {len(audio_data)} samples at {sample_rate}Hz")
-        
-        try:
-            # Create temporary WAV file
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                temp_path = Path(temp_file.name)
-            
-            try:
-                # Ensure correct data format for scipy.io.wavfile
-                if audio_data.dtype != np.int16:
-                    # Convert to int16 if needed
-                    if audio_data.dtype == np.float32:
-                        audio_data = (audio_data * 32767).astype(np.int16)
-                    elif audio_data.dtype == np.float64:
-                        audio_data = (audio_data * 32767).astype(np.int16)
-                    else:
-                        audio_data = audio_data.astype(np.int16)
-                
-                # Ensure mono audio for Whisper
-                if audio_data.ndim > 1:
-                    audio_data = audio_data.flatten()
-                
-                # Save to temporary WAV file
-                scipy.io.wavfile.write(str(temp_path), sample_rate, audio_data)
-                
-                # Transcribe the file
-                return self.transcribe_file(temp_path, language)
-                
-            finally:
-                # Clean up temporary file
-                if temp_path.exists():
-                    temp_path.unlink()
-                    
-        except Exception as e:
-            logger.error(f"Error transcribing audio array: {e}")
-            raise
-    
-    def transcribe_file(self, file_path: Union[str, Path], language: Optional[str] = None) -> Dict[str, str]:
+    def transcribe_file(self, audio_path: Union[str, Path]) -> Dict[str, any]:
         """
         Transcribe audio from a file.
         
         Args:
-            file_path: Path to audio file
-            language: Optional language code. If None, auto-detect
+            audio_path: Path to the audio file
             
         Returns:
-            dict: Transcription result with 'text' and 'language' keys
+            Transcription result dictionary
         """
-        file_path = Path(file_path)
+        audio_path = Path(audio_path)
+        if not audio_path.exists():
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
         
-        if not file_path.exists():
-            raise FileNotFoundError(f"Audio file not found: {file_path}")
+        logger.info(f"Transcribing file: {audio_path}")
         
-        logger.info(f"Transcribing audio file: {file_path}")
+        # Transcribe with Whisper
+        result = self.model.transcribe(
+            str(audio_path),
+            language=self.whisper_config.language,
+            task=self.whisper_config.task,
+            temperature=self.whisper_config.temperature,
+            initial_prompt=self.whisper_config.initial_prompt
+        )
         
-        try:
-            # Prepare transcription options
-            options = {}
-            if language:
-                options['language'] = language
-            
-            # Transcribe using Whisper
-            result = self.model.transcribe(str(file_path), **options)
-            
-            # Extract text and detected language
-            transcribed_text = result.get("text", "").strip()
-            detected_language = result.get("language", "unknown")
-            
-            logger.info(f"Transcription completed: {len(transcribed_text)} characters, language: {detected_language}")
-            logger.debug(f"Transcribed text: {transcribed_text}")
-            
-            return {
-                "text": transcribed_text,
-                "language": detected_language,
-                "segments": result.get("segments", []),
-            }
-            
-        except Exception as e:
-            logger.error(f"Error transcribing file {file_path}: {e}")
-            raise
+        logger.info(f"Transcription completed: {len(result['text'])} characters")
+        return result
     
-    def transcribe_with_timestamps(
-        self, 
-        audio_input: Union[np.ndarray, str, Path],
-        language: Optional[str] = None
-    ) -> Dict:
+    def transcribe_array(self, audio_array: np.ndarray) -> Dict[str, any]:
         """
-        Transcribe audio with word-level timestamps.
+        Transcribe audio from a numpy array.
         
         Args:
-            audio_input: Audio data (array) or file path
-            language: Optional language code
+            audio_array: Audio data as numpy array
             
         Returns:
-            dict: Detailed transcription result with timestamps
+            Transcription result dictionary
         """
-        logger.info("Transcribing with word-level timestamps")
+        if len(audio_array) == 0:
+            return {"text": "", "segments": [], "language": "en"}
         
-        try:
-            if isinstance(audio_input, np.ndarray):
-                # Convert array to temporary file
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                    temp_path = Path(temp_file.name)
-                
-                try:
-                    # Save array to WAV file
-                    if audio_input.dtype != np.int16:
-                        if audio_input.dtype == np.float32:
-                            audio_input = (audio_input * 32767).astype(np.int16)
-                        else:
-                            audio_input = audio_input.astype(np.int16)
-                    
-                    scipy.io.wavfile.write(str(temp_path), self.audio_config.sample_rate, audio_input)
-                    file_path = temp_path
-                    
-                finally:
-                    cleanup_temp = True
-            else:
-                file_path = Path(audio_input)
-                cleanup_temp = False
+        # Save to temporary file (Whisper needs a file)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            
+            # Ensure audio is in the correct format
+            if audio_array.dtype != np.int16:
+                # Convert to int16
+                if audio_array.dtype == np.float32 or audio_array.dtype == np.float64:
+                    audio_array = (audio_array * 32767).astype(np.int16)
+                else:
+                    audio_array = audio_array.astype(np.int16)
+            
+            # Write WAV file
+            scipy.io.wavfile.write(
+                tmp_path,
+                self.audio_config.sample_rate,
+                audio_array
+            )
             
             try:
-                # Transcribe with word_timestamps enabled
-                options = {"word_timestamps": True}
-                if language:
-                    options["language"] = language
-                
-                result = self.model.transcribe(str(file_path), **options)
-                
-                logger.info(f"Timestamp transcription completed: {len(result.get('segments', []))} segments")
+                # Transcribe the temporary file
+                result = self.transcribe_file(tmp_path)
                 return result
-                
             finally:
-                if cleanup_temp and temp_path.exists():
-                    temp_path.unlink()
-                    
-        except Exception as e:
-            logger.error(f"Error transcribing with timestamps: {e}")
-            raise
+                # Clean up temporary file
+                tmp_path.unlink(missing_ok=True)
+    
+    def detect_language(self, audio_path: Union[str, Path]) -> str:
+        """
+        Detect the language of an audio file.
+        
+        Args:
+            audio_path: Path to the audio file
+            
+        Returns:
+            Detected language code (e.g., 'en', 'es', 'fr')
+        """
+        audio_path = Path(audio_path)
+        
+        # Load audio and detect language
+        audio = whisper.load_audio(str(audio_path))
+        audio = whisper.pad_or_trim(audio)
+        
+        # Make log-Mel spectrogram
+        mel = whisper.log_mel_spectrogram(audio).to(self.model.device)
+        
+        # Detect the spoken language
+        _, probs = self.model.detect_language(mel)
+        detected_language = max(probs, key=probs.get)
+        
+        logger.info(f"Detected language: {detected_language} (confidence: {probs[detected_language]:.2f})")
+        return detected_language
     
     def get_supported_languages(self) -> Dict[str, str]:
         """
-        Get supported languages for Whisper.
+        Get a dictionary of supported languages.
         
         Returns:
-            dict: Language codes and names
+            Dictionary mapping language codes to language names
         """
-        try:
-            return whisper.tokenizer.LANGUAGES
-        except Exception as e:
-            logger.error(f"Error getting supported languages: {e}")
-            return {}
+        return whisper.tokenizer.LANGUAGES
     
-    def detect_language(self, audio_input: Union[np.ndarray, str, Path]) -> str:
-        """
-        Detect the language of audio input.
-        
-        Args:
-            audio_input: Audio data (array) or file path
-            
-        Returns:
-            str: Detected language code
-        """
-        logger.info("Detecting audio language")
-        
-        try:
-            if isinstance(audio_input, np.ndarray):
-                # Use transcribe_array to get language
-                result = self.transcribe_array(audio_input)
-                return result.get("language", "unknown")
-            else:
-                # Use transcribe_file to get language
-                result = self.transcribe_file(audio_input)
-                return result.get("language", "unknown")
-                
-        except Exception as e:
-            logger.error(f"Error detecting language: {e}")
-            return "unknown"
-    
-    def change_model(self, model_name: str) -> None:
-        """
-        Change the Whisper model.
-        
-        Args:
-            model_name: New model name (tiny, base, small, medium, large)
-        """
-        valid_models = ["tiny", "base", "small", "medium", "large"]
-        if model_name not in valid_models:
-            raise ValueError(f"Invalid model name. Must be one of: {valid_models}")
-        
-        if model_name != self.model_name:
-            logger.info(f"Changing Whisper model from {self.model_name} to {model_name}")
-            self.model_name = model_name
-            self.whisper_config.model = model_name
-            self._model = None  # Force reload on next use
-    
-    def test_transcription(self) -> bool:
-        """
-        Test transcription functionality with a silent audio clip.
-        
-        Returns:
-            bool: True if test was successful
-        """
-        try:
-            logger.info("Testing Whisper transcription...")
-            
-            # Create a short silent audio clip for testing
-            duration = 1.0  # 1 second
-            sample_rate = self.audio_config.sample_rate
-            test_audio = np.zeros(int(duration * sample_rate), dtype=np.int16)
-            
-            # Transcribe the silent audio
-            result = self.transcribe_array(test_audio)
-            
-            # Silent audio should return empty or minimal text
-            logger.info(f"Test transcription result: '{result.get('text', '')}'")
-            logger.info("Whisper transcription test completed successfully")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Whisper transcription test failed: {e}")
-            return False
-
-
-def get_available_models() -> list:
-    """
-    Get list of available Whisper models.
-    
-    Returns:
-        list: Available model names
-    """
-    return ["tiny", "base", "small", "medium", "large"]
-
-
-def estimate_model_size(model_name: str) -> str:
-    """
-    Estimate the download size of a Whisper model.
-    
-    Args:
-        model_name: Model name
-        
-    Returns:
-        str: Estimated size description
-    """
-    sizes = {
-        "tiny": "~39 MB",
-        "base": "~74 MB", 
-        "small": "~244 MB",
-        "medium": "~769 MB",
-        "large": "~1550 MB"
-    }
-    return sizes.get(model_name, "Unknown size") 
+    def unload_model(self) -> None:
+        """Unload the model from memory."""
+        if self._model is not None:
+            del self._model
+            self._model = None
+            logger.info("Whisper model unloaded") 

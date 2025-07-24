@@ -1,6 +1,6 @@
 # TranscribeTalk
 
-A CLI application for voice-to-voice AI conversations using speech-to-text, AI processing, and text-to-speech.
+A CLI application for voice-to-voice AI conversations using speech-to-text, AI processing, and text-to-speech, now enhanced with agentic capabilities.
 
 ## 🎯 Overview
 
@@ -8,8 +8,17 @@ TranscribeTalk transforms your voice into AI conversations by:
 
 1. **Recording** your voice using your microphone
 2. **Transcribing** speech to text using OpenAI Whisper
-3. **Processing** with AI using OpenAI GPT models
+3. **Processing** with AI using OpenAI GPT models (with tool-calling capabilities)
 4. **Speaking** the response using ElevenLabs TTS
+
+### New Agentic Features (Phase 1 Complete)
+
+TranscribeTalk now includes a foundational agentic architecture inspired by `gemini-cli`:
+
+- **Event-driven architecture** with structured events for better separation of concerns
+- **Tool integration framework** for extending AI capabilities with local environment interactions
+- **Async/await support** for improved performance and responsiveness
+- **Modular design** with clear separation between voice I/O, AI services, and tool management
 
 ## 🚀 Quick Start
 
@@ -98,27 +107,82 @@ transcribe-talk --help
 - **Optional TTS** (can be disabled with `--no-tts`)
 - **Automation friendly** for scripts and workflows
 
-## 📋 Features
+## 📋 Architecture
 
-### Interactive Mode
+### New Agentic Architecture (Phase 1)
 
-- Continuous voice conversations
-- Real-time speech-to-text
-- AI-powered responses
-- Text-to-speech playback
+The application now features a modular, event-driven architecture:
 
-### One-Shot Mode
+```
+TranscribeTalk Agentic Architecture
+├── Voice I/O Layer
+│   ├── AudioRecorder     # Captures voice input
+│   └── AudioPlayer       # Plays TTS output
+├── AI Services Layer
+│   ├── Agent            # Orchestrates conversation flow
+│   ├── Turn             # Manages single interaction cycles
+│   ├── ChatService      # Handles OpenAI API communication
+│   ├── PromptEngine     # Assembles context for AI
+│   ├── Transcriber      # Converts speech to text
+│   └── TTS              # Converts text to speech
+├── Tool Management Layer
+│   ├── ToolRegistry     # Discovers and registers tools
+│   └── ToolScheduler    # Executes tool calls safely
+└── State Management
+    └── ConversationHistory  # Maintains conversation context
+```
 
-- Process single audio files
-- Batch processing support
-- Multiple output formats (text, JSON)
+### Project Structure
 
-### Configuration Management
+```
+transcribe-talk/
+├── src/transcribe_talk/
+│   ├── cli.py                 # Main CLI entry point (refactored)
+│   ├── audio/                 # Audio recording/playback
+│   ├── ai/                    # AI services
+│   │   ├── ai_legacy/         # Legacy modules (preserved)
+│   │   ├── agent.py           # Agent orchestrator
+│   │   ├── chat_service.py    # OpenAI API interface
+│   │   ├── events.py          # Event definitions
+│   │   ├── history.py         # Conversation history
+│   │   ├── prompt_engine.py   # Context assembly
+│   │   ├── tool_scheduler.py  # Tool execution
+│   │   ├── transcriber.py     # Speech-to-text
+│   │   ├── tts.py            # Text-to-speech
+│   │   └── turn.py           # Turn management
+│   ├── tools/                 # Tool infrastructure
+│   │   └── tool_registry.py   # Tool discovery
+│   ├── config/                # Configuration management
+│   └── utils/                 # Shared utilities
+├── tests/                     # Test suite
+├── pyproject.toml            # Project configuration
+├── requirements.txt          # Dependencies
+├── AGENT.md                  # Agentic architecture documentation
+├── GEMINICLI.md             # Architecture inspiration
+└── README.md                # This file
+```
 
-- Environment-based configuration
-- API key validation
-- Model selection (Whisper, OpenAI, TTS)
-- Audio settings customization
+### Development Setup
+
+```bash
+# Activate virtual environment
+source .venv/bin/activate  # macOS/Linux
+# or
+# .venv\Scripts\activate  # Windows
+
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Format code
+black src/ tests/
+isort src/ tests/
+
+# Type checking
+mypy src/
+```
 
 ## 🔧 Configuration
 
@@ -147,93 +211,60 @@ transcribe-talk once --input audio.wav --output result.txt --format json
 transcribe-talk --log-level DEBUG --log-file transcribe.log
 ```
 
-## 🏗️ Development
-
-### Project Structure
-
-```
-transcribe-talk/
-├── src/transcribe_talk/
-│   ├── cli.py                 # Main CLI entry point
-│   ├── audio/                 # Audio recording/playback
-│   ├── ai/                    # AI services (Whisper, OpenAI, TTS)
-│   ├── config/                # Configuration management
-│   └── utils/                 # Shared utilities
-├── tests/                     # Test suite
-├── pyproject.toml            # Project configuration
-├── requirements.txt          # Dependencies
-└── README.md                # This file
-```
-
-### Development Setup
-
-```bash
-# Activate virtual environment
-source .venv/bin/activate  # macOS/Linux
-# or
-# .venv\Scripts\activate  # Windows
-
-# Install development dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Format code
-black src/ tests/
-isort src/ tests/
-
-# Type checking
-mypy src/
-```
-
 ## 📦 Dependencies
 
 ### Core Dependencies
 
 - `openai-whisper` - Speech-to-text transcription
-- `openai` - AI conversation processing
+- `openai` - AI conversation processing with tool support
 - `elevenlabs` - Text-to-speech synthesis
 - `sounddevice` - Audio recording
 - `click` - CLI framework
 - `rich` - Beautiful terminal output
 - `pydantic` - Configuration validation
+- `aiofiles` - Async file operations
 
 ### Development Dependencies
 
 - `pytest` - Testing framework
+- `pytest-asyncio` - Async test support
 - `black` - Code formatting
 - `isort` - Import sorting
 - `mypy` - Type checking
 
-## 🚦 Status
+## 🚦 Development Status
 
-**Phase 1 Complete** ✅
+**Phase 1 Complete** ✅ (Foundational Architecture)
 
-- [x] Project structure and packaging
-- [x] Configuration management
-- [x] Basic CLI framework
-- [x] Logging and error handling
+- [x] Event-driven architecture with Turn/Agent pattern
+- [x] Tool integration framework
+- [x] Async/await support throughout
+- [x] Legacy code preservation in ai_legacy/
+- [x] Refactored CLI with Agent integration
+- [x] Type safety with comprehensive hints
+- [x] Modular design with clear separation of concerns
 
-**Phase 2 Complete** ✅
+**Phase 2 In Progress** 🚧 (MVP Agentic Loop)
 
-- [x] Audio module migration
-- [x] AI services integration
-- [x] Core functionality implementation
-- [x] Interactive mode implementation
-- [x] One-shot mode implementation
+- [ ] First tool implementation (list_directory)
+- [ ] Tool confirmation flow (--auto-confirm)
+- [ ] Safety guardrails (timeouts, retry logic)
+- [ ] Telemetry and logging enhancements
+- [ ] End-to-end testing framework
 
-**Phase 3 Complete** ✅
+**Phase 3 Planned** 📋 (Expanding Capabilities)
 
-- [x] Enhanced CLI experience
-- [x] Full voice-to-voice conversation workflow
-- [x] Professional user interface with Rich
+- [ ] Additional tools (read_file, write_file)
+- [ ] Long-term memory with CONTEXT.md
+- [ ] Memory management tools
+- [ ] Enhanced prompt engineering
 
-**Phase 4 Planned** 📋
+**Phase 4 Planned** 📋 (Advanced Hardening)
 
-- [ ] Testing infrastructure
-- [ ] Documentation completion
-- [ ] Distribution packaging
+- [ ] Loop detection and prevention
+- [ ] Chat compression for long conversations
+- [ ] Advanced error recovery
+- [ ] Performance optimizations
 
 ## 🔧 Troubleshooting
 
@@ -270,6 +301,16 @@ cat .env
 transcribe-talk config validate
 ```
 
+**Import Errors After Update:**
+
+```bash
+# Reinstall in development mode
+pip install -e .
+
+# Clear Python cache
+find . -type d -name "__pycache__" -exec rm -rf {} +
+```
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -289,3 +330,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [ElevenLabs](https://elevenlabs.io/) for text-to-speech
 - [Click](https://click.palletsprojects.com/) for CLI framework
 - [Rich](https://rich.readthedocs.io/) for beautiful terminal output
+- [gemini-cli](https://github.com/google/gemini-cli) for architectural inspiration

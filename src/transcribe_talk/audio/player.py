@@ -1,18 +1,19 @@
 """
 Audio playback functionality for TranscribeTalk.
 
-This module provides audio playback capabilities for various audio sources:
-- Playing numpy arrays (recorded audio)
-- Playing audio from files (WAV, MP3, etc.)
-- Playing audio from binary data (TTS responses)
-- Cross-platform audio playback
+This module provides audio playback capabilities:
+- Play numpy arrays directly
+- Play audio files (WAV, MP3, etc.)
+- Play binary audio data
+- Handle different audio formats
+- Integration with sounddevice for low-latency playback
 """
 
 import io
 import logging
 import tempfile
 from pathlib import Path
-from typing import Union, Optional
+from typing import Optional, Union
 
 import numpy as np
 import scipy.io.wavfile
@@ -143,27 +144,30 @@ class AudioPlayer:
     
     def play_with_elevenlabs(self, audio_bytes: bytes) -> None:
         """
-        Play audio using ElevenLabs' native play function.
+        Play audio bytes directly from ElevenLabs TTS.
         
-        This method attempts to use ElevenLabs' built-in play function
-        for optimal compatibility with their TTS output.
+        ElevenLabs returns audio in MP3 format by default.
         
         Args:
-            audio_bytes: Binary audio data from ElevenLabs TTS
+            audio_bytes: MP3 audio data as bytes
         """
-        try:
-            # Try to import and use ElevenLabs play function
-            from elevenlabs import play
-            
-            logger.info("Playing audio using ElevenLabs native player")
-            play(audio_bytes)
-            
-        except ImportError:
-            logger.warning("ElevenLabs not available, falling back to generic player")
-            self.play_binary_data(audio_bytes, "mp3")
-        except Exception as e:
-            logger.error(f"Error with ElevenLabs player, falling back to generic: {e}")
-            self.play_binary_data(audio_bytes, "mp3")
+        self.play_binary_data(audio_bytes, audio_format="mp3")
+    
+    def play(self, audio_data: Union[bytes, np.ndarray]) -> None:
+        """
+        Generic play method that handles different audio formats.
+        
+        Args:
+            audio_data: Audio data as bytes (MP3) or numpy array (raw PCM)
+        """
+        if isinstance(audio_data, bytes):
+            # Assume bytes are MP3 from TTS
+            self.play_binary_data(audio_data, audio_format="mp3")
+        elif isinstance(audio_data, np.ndarray):
+            # Play raw PCM array
+            self.play_array(audio_data)
+        else:
+            raise ValueError(f"Unsupported audio data type: {type(audio_data)}")
     
     def test_playback(self, duration: float = 1.0, frequency: float = 440.0) -> bool:
         """

@@ -14,6 +14,7 @@ import warnings
 from functools import wraps
 from pathlib import Path
 from typing import Optional
+import asyncio
 
 import click
 from rich.console import Console
@@ -23,9 +24,11 @@ from rich.text import Text
 
 from .audio.player import AudioPlayer
 from .audio.recorder import AudioRecorder
-from .ai.chat import OpenAIChat
+from .ai.agent import Agent, AgentConfig
 from .ai.transcriber import WhisperTranscriber
 from .ai.tts import ElevenLabsTTS
+from .ai.events import EventType, ContentEvent, ErrorEvent, FunctionResponseEvent
+from .tools import get_global_registry
 from .config.settings import get_settings, Settings
 from .utils.helpers import format_duration, truncate_text
 
@@ -100,12 +103,12 @@ def handle_exceptions(func):
         try:
             return func(*args, **kwargs)
         except KeyboardInterrupt:
-            console.print("\n[yellow]Operation cancelled by user.[/yellow]")
-            sys.exit(1)
+            console.print("\n[yellow]Interrupted by user[/yellow]")
+            sys.exit(0)
         except Exception as e:
-            console.print(f"\n[red]Error: {str(e)}[/red]")
-            if console.is_terminal:
-                console.print("\n[dim]For help, run: transcribe-talk --help[/dim]")
+            console.print(f"[red]Error: {str(e)}[/red]")
+            if logging.getLogger().isEnabledFor(logging.DEBUG):
+                console.print_exception()
             sys.exit(1)
     return _exception_wrapper
 
@@ -122,8 +125,20 @@ class InteractiveSession:
         self.recorder = AudioRecorder(settings.audio)
         self.player = AudioPlayer(settings.audio)
         self.transcriber = WhisperTranscriber(settings.whisper, settings.audio)
-        self.chat = OpenAIChat(settings.openai)
         self.tts = ElevenLabsTTS(settings.elevenlabs)
+        
+        # Initialize Agent with tool registry
+        agent_config = AgentConfig(
+            max_turns=20,
+            max_tool_calls_per_turn=5,
+            auto_confirm=False,
+            debug=False
+        )
+        self.agent = Agent(
+            settings=settings,
+            tool_registry=get_global_registry(),
+            config=agent_config
+        )
         
         # Set up signal handler for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -151,11 +166,12 @@ class InteractiveSession:
         console.print(welcome_panel)
         
         conversation_count = 0
+        self.agent.start_conversation()
         
         try:
             while self.running:
                 conversation_count += 1
-                console.print(f"\n[dim]--- Conversation {conversation_count} ---[/dim]")
+                console.print(f"\n[dim]--- Turn {conversation_count} ---[/dim]")
                 
                 # Get user input method choice
                 choice = self._get_input_choice()
@@ -170,8 +186,9 @@ class InteractiveSession:
                     self._show_help()
                     continue
                 elif choice == "clear":
-                    self.chat.clear_conversation()
+                    self.agent.start_conversation()  # Reset conversation
                     console.print("[green]✓[/green] Conversation history cleared")
+                    conversation_count = 0
                     continue
                 else:
                     continue
@@ -180,11 +197,8 @@ class InteractiveSession:
                     console.print("[yellow]No input received. Try again.[/yellow]")
                     continue
                 
-                # Process with AI and generate response
-                ai_response = self._process_with_ai(user_text)
-                if ai_response:
-                    # Convert to speech and play
-                    self._synthesize_and_play(ai_response)
+                # Process with Agent
+                self._process_with_agent(user_text)
                     
         except Exception as e:
             console.print(f"[red]Session error: {e}[/red]")
@@ -252,69 +266,120 @@ class InteractiveSession:
     
     def _get_text_input(self) -> Optional[str]:
         """Get text input from user."""
-        try:
-            user_text = console.input("\n[cyan]✏️  Type your message:[/cyan] ").strip()
-            return user_text if user_text else None
-        except (EOFError, KeyboardInterrupt):
-            return None
+        text = console.input("\n[cyan]Enter your message:[/cyan] ").strip()
+        return text if text else None
     
-    def _process_with_ai(self, user_text: str) -> Optional[str]:
-        """Process user input with AI."""
+    def _process_with_agent(self, user_text: str) -> None:
+        """Process user input with the Agent and handle the response."""
         try:
-            # Replace spinner with simple message
-            console.print("[cyan]🤔 AI is thinking...[/cyan]")
-            ai_response = self.chat.chat(user_text)
-            console.print("[green]✓[/green] AI response generated")
+            console.print("\n[cyan]🤖 Processing...[/cyan]")
             
-            console.print(f"[magenta]AI:[/magenta] {ai_response}")
-            return ai_response
+            # Run agent turn asynchronously
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            accumulated_response = ""
+            
+            async def process_turn():
+                nonlocal accumulated_response
+                
+                async for event in self.agent.execute_turn(user_text):
+                    if event.type == EventType.CONTENT:
+                        # Print content as it streams
+                        console.print(event.content, end="")
+                        accumulated_response += event.content
+                    
+                    elif event.type == EventType.ERROR:
+                        console.print(f"\n[red]Error: {event.error_message}[/red]")
+                        if not event.recoverable:
+                            return
+                    
+                    elif event.type == EventType.FUNCTION_RESPONSE:
+                        # Show tool execution results
+                        if event.success:
+                            console.print(f"\n[green]Tool executed successfully[/green]")
+                        else:
+                            console.print(f"\n[red]Tool error: {event.error_message}[/red]")
+                    
+                    elif event.type == EventType.DEBUG and self.agent.config.debug:
+                        console.print(f"\n[dim]Debug: {event.message}[/dim]")
+            
+            try:
+                loop.run_until_complete(process_turn())
+            finally:
+                loop.close()
+            
+            # Print newline after streaming content
+            if accumulated_response:
+                console.print()  # New line after response
+                
+                # Synthesize and play the response
+                self._synthesize_and_play(accumulated_response)
             
         except Exception as e:
-            console.print(f"[red]AI processing error: {e}[/red]")
-            return None
+            console.print(f"[red]Processing error: {e}[/red]")
+            if logging.getLogger().isEnabledFor(logging.DEBUG):
+                console.print_exception()
     
     def _synthesize_and_play(self, text: str) -> None:
-        """Convert text to speech and play it."""
+        """Synthesize text to speech and play it."""
         try:
-            # Replace spinner with simple message
-            console.print("[cyan]🎵 Generating speech...[/cyan]")
-            audio_bytes = self.tts.synthesize(text)
-            console.print("[green]✓[/green] Speech generated")
+            console.print("[cyan]🔊 Speaking...[/cyan]")
             
-            console.print("[green]🔊 Playing AI response...[/green]")
-            self.player.play_with_elevenlabs(audio_bytes)
+            # Synthesize speech
+            audio_data = self.tts.synthesize(text)
             
+            if audio_data:
+                # Play the audio
+                self.player.play(audio_data)
+                console.print("[green]✓[/green] Response played")
+            else:
+                console.print("[yellow]No audio generated[/yellow]")
+                
         except Exception as e:
-            console.print(f"[red]Speech synthesis error: {e}[/red]")
+            console.print(f"[red]TTS error: {e}[/red]")
     
     def _show_help(self) -> None:
         """Show help information."""
-        help_panel = Panel.fit(
-            "[bold]TranscribeTalk Commands:[/bold]\n\n"
-            "[cyan]v[/cyan] - 🎤 Record voice input\n"
-            "[cyan]t[/cyan] - ✏️  Type text input\n"
-            "[cyan]c[/cyan] - 🗑️  Clear conversation history\n"
-            "[cyan]h[/cyan] - ❓ Show this help\n"
-            "[cyan]q[/cyan] - 🚪 Quit the session\n\n"
-            "[bold]Voice Recording:[/bold]\n"
-            "• Recording starts immediately when you choose voice input\n"
-            "• Press Enter to stop recording\n"
-            "• Speak clearly into your microphone\n\n"
-            "[bold]Configuration:[/bold]\n"
-            f"• Whisper model: {self.settings.whisper.model}\n"
-            f"• OpenAI model: {self.settings.openai.model}\n"
-            f"• TTS voice: {self.settings.elevenlabs.voice_id}",
-            title="Help",
-            border_style="cyan"
-        )
-        console.print(help_panel)
+        help_text = """
+[bold cyan]TranscribeTalk Help[/bold cyan]
+
+[bold]Commands:[/bold]
+  v/voice  - Record voice input
+  t/text   - Type text input
+  c/clear  - Clear conversation history
+  h/help   - Show this help
+  q/quit   - Exit the application
+
+[bold]Features:[/bold]
+  • Voice-to-voice AI conversations
+  • Tool-augmented responses (when available)
+  • Real-time transcription
+  • Natural text-to-speech
+
+[bold]Tips:[/bold]
+  • Speak clearly when recording
+  • Keep responses concise for better TTS
+  • Use 'clear' to start fresh conversations
+"""
+        console.print(Panel(help_text, title="Help", border_style="cyan"))
     
     def _cleanup(self) -> None:
         """Clean up resources."""
         try:
-            if self.recorder:
-                self.recorder.cleanup()
-            console.print("[green]✓[/green] Session ended")
+            # End conversation and show summary
+            summary = self.agent.end_conversation()
+            
+            console.print("\n[bold]Session Summary:[/bold]")
+            console.print(f"  Turns: {summary['turn_count']}")
+            console.print(f"  Total tokens: {summary['chat_telemetry']['total_tokens_used']}")
+            console.print(f"  Estimated cost: ${summary['chat_telemetry']['total_cost']}")
+            
+            if 'tool_summary' in summary and summary['tool_summary']['total_calls'] > 0:
+                console.print(f"  Tool calls: {summary['tool_summary']['total_calls']}")
+            
+            console.print("\n[green]Session ended successfully[/green]")
+            
         except Exception as e:
             console.print(f"[yellow]Cleanup warning: {e}[/yellow]")
 
@@ -495,9 +560,21 @@ def once(ctx: click.Context, input: Optional[str], output: Optional[str], format
     # Initialize components
     recorder = AudioRecorder(settings.audio)
     transcriber = WhisperTranscriber(settings.whisper, settings.audio)
-    chat = OpenAIChat(settings.openai)
     tts = ElevenLabsTTS(settings.elevenlabs)
     player = AudioPlayer(settings.audio)
+    
+    # Initialize Agent for one-shot processing
+    agent_config = AgentConfig(
+        max_turns=1,
+        max_tool_calls_per_turn=5,
+        auto_confirm=True,  # Auto-confirm for non-interactive mode
+        debug=False
+    )
+    agent = Agent(
+        settings=settings,
+        tool_registry=get_global_registry(),
+        config=agent_config
+    )
     
     try:
         # Get audio data
@@ -533,7 +610,31 @@ def once(ctx: click.Context, input: Optional[str], output: Optional[str], format
         
         # Process with AI
         console.print("[cyan]🤔 Processing with AI...[/cyan]")
-        ai_response = chat.chat(user_text, remember_conversation=False)
+        
+        # Start conversation and execute turn
+        agent.start_conversation()
+        
+        # Run agent turn and collect response
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        ai_response = ""
+        
+        async def process_once():
+            nonlocal ai_response
+            async for event in agent.execute_turn(user_text):
+                if event.type == EventType.CONTENT:
+                    ai_response += event.content
+                elif event.type == EventType.ERROR:
+                    console.print(f"[red]Error: {event.error_message}[/red]")
+                    if not event.recoverable:
+                        raise Exception(event.error_message)
+        
+        try:
+            loop.run_until_complete(process_once())
+        finally:
+            loop.close()
+        
         console.print("[green]✓[/green] AI response generated")
         
         console.print(f"[magenta]AI Response:[/magenta] {ai_response}")
@@ -565,7 +666,7 @@ def once(ctx: click.Context, input: Optional[str], output: Optional[str], format
             console.print("[green]✓[/green] Speech generated")
             
             console.print("[green]🔊 Playing AI response...[/green]")
-            player.play_with_elevenlabs(audio_bytes)
+            player.play(audio_bytes)
         
     except Exception as e:
         console.print(f"[red]Error in one-shot mode: {e}[/red]")
