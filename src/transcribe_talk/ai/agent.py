@@ -1,10 +1,11 @@
 """
-Agent - Orchestrates the agentic conversation flow.
+Agent module for TranscribeTalk.
 
-This module provides the Agent class which is the central orchestrator for:
+The Agent is the central orchestrator that manages:
 - Managing all core components (PromptEngine, ChatService, Turn, ToolScheduler, ConversationHistory)
-- Executing conversation turns with tool support
-- Enforcing safety limits and managing the conversation lifecycle
+- Orchestrating the conversation flow
+- Handling tool execution requests
+- Managing conversation state and history
 """
 
 import asyncio
@@ -13,22 +14,21 @@ from typing import Dict, List, Optional, Any, AsyncIterator, Callable
 from datetime import datetime
 from pathlib import Path
 
-from rich.console import Console
-
 from .chat_service import ChatService
 from .prompt_engine import PromptEngine
 from .history import ConversationHistory, MessageRole
-from .turn import Turn, SyncTurn
 from .tool_scheduler import ToolScheduler, ApprovalMode
+from .turn import Turn, SyncTurn
+from .loop_detector import LoopDetector
+from .chat_compressor import ChatCompressor
 from .events import (
     TurnEvent, ContentEvent, ToolCallRequestEvent, FunctionResponseEvent,
     FinishedEvent, ErrorEvent, EventType
 )
-from ..tools import ToolRegistry
+from ..tools import ToolRegistry, get_global_registry
 from ..config.settings import Settings
 
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 class AgentConfig:
@@ -98,17 +98,30 @@ class Agent:
             max_tokens=8000
         )
         
+        # Initialize chat compressor
+        self.chat_compressor = ChatCompressor(
+            chat_service=self.chat_service,
+            compression_threshold=6000,
+            preserve_recent=10
+        )
+        
         # Tool-related components
         self.tool_registry = tool_registry
         if tool_registry:
             approval_mode = ApprovalMode.NEVER if self.config.auto_confirm else ApprovalMode.SMART
             self.tool_scheduler = ToolScheduler(
-                tool_registry=tool_registry,
+                registry=tool_registry,
                 approval_mode=approval_mode,
                 dry_run=self.config.dry_run
             )
+            # Initialize loop detector for tool calls
+            self.loop_detector = LoopDetector(
+                max_repetitions=3,
+                time_window=60
+            )
         else:
             self.tool_scheduler = None
+            self.loop_detector = None
         
         # State tracking
         self._turn_count = 0
@@ -145,22 +158,32 @@ class Agent:
             )
             return
         
-        # Add user message to history
+        # Add user message
         self.conversation_history.add_user_message(user_input)
         
-        # Set system prompt if first turn
-        if self._turn_count == 1:
+        # Check if we need to compress the conversation
+        if await self.chat_compressor.should_compress(self.conversation_history):
+            logger.info("Compressing conversation history...")
+            compressed_history, summary = await self.chat_compressor.compress_history(
+                self.conversation_history
+            )
+            if summary:
+                self.conversation_history = compressed_history
+                logger.info(f"Conversation compressed. Summary: {summary[:100]}...")
+        
+        # Set system prompt if first turn or after compression
+        if self._turn_count == 1 or len(self.conversation_history.messages) <= 2:
             system_prompt = self.prompt_engine.build_system_prompt()
             self.conversation_history.set_system_prompt(system_prompt)
         
         # Prepare messages for API
         messages = self.conversation_history.get_messages_for_api()
         
-        # Create and run turn
+        # Create turn with tool support if available
         turn = Turn(
             chat_service=self.chat_service,
             tool_registry=self.tool_registry,
-            debug=self.config.debug
+            loop_detector=self.loop_detector
         )
         
         # Process turn events
@@ -263,11 +286,11 @@ class Agent:
         # Prepare messages including tool responses
         messages = self.conversation_history.get_messages_for_api()
         
-        # Create new turn
+        # Create continuation turn
         turn = Turn(
             chat_service=self.chat_service,
             tool_registry=self.tool_registry,
-            debug=self.config.debug
+            loop_detector=self.loop_detector
         )
         
         # Process continuation

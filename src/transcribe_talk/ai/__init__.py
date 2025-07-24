@@ -8,6 +8,8 @@ from .tool_scheduler import ToolScheduler, ApprovalMode
 from .transcriber import WhisperTranscriber
 from .tts import ElevenLabsTTS
 from .turn import Turn, SyncTurn
+from .loop_detector import LoopDetector
+from .chat_compressor import ChatCompressor
 from .events import (
     TurnEvent, ContentEvent, ThoughtEvent, ToolCallRequestEvent,
     FunctionResponseEvent, FinishedEvent, ErrorEvent, DebugEvent,
@@ -16,31 +18,13 @@ from .events import (
 
 __all__ = [
     # Core components
-    "Agent",
-    "AgentConfig",
-    "ChatService",
-    "ConversationHistory",
-    "Message",
-    "MessageRole",
-    "PromptEngine",
-    "ToolScheduler",
-    "ApprovalMode",
-    "Turn",
-    "SyncTurn",
-    
+    "Agent", "AgentConfig", "ChatService", "ConversationHistory", "Message",
+    "MessageRole", "PromptEngine", "ToolScheduler", "ApprovalMode", "Turn",
+    "SyncTurn", "LoopDetector", "ChatCompressor",
     # Services
-    "WhisperTranscriber",
-    "ElevenLabsTTS",
-    
+    "WhisperTranscriber", "ElevenLabsTTS",
     # Events
-    "TurnEvent",
-    "ContentEvent",
-    "ThoughtEvent",
-    "ToolCallRequestEvent",
-    "FunctionResponseEvent",
-    "FinishedEvent",
-    "ErrorEvent",
-    "DebugEvent",
-    "EventType",
-    "ToolCallInfo"
+    "TurnEvent", "ContentEvent", "ThoughtEvent", "ToolCallRequestEvent",
+    "FunctionResponseEvent", "FinishedEvent", "ErrorEvent", "DebugEvent",
+    "EventType", "ToolCallInfo"
 ]

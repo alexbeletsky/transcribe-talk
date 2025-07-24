@@ -8,9 +8,10 @@ a single request to the LLM and handling its streamed response.
 import asyncio
 import json
 import logging
-from typing import AsyncIterator, Dict, List, Optional, Any, Union
+from typing import AsyncGenerator, List, Dict, Any, Optional
 from datetime import datetime
 
+from openai import AsyncOpenAI, OpenAI
 from openai.types.chat import ChatCompletionChunk
 from openai.types.chat.chat_completion_chunk import ChoiceDelta, ChoiceDeltaToolCall
 
@@ -20,6 +21,7 @@ from .events import (
     FinishedEvent, ErrorEvent, DebugEvent, ToolCallInfo
 )
 from ..tools import ToolRegistry
+from .loop_detector import LoopDetector
 
 logger = logging.getLogger(__name__)
 
@@ -36,22 +38,22 @@ class Turn:
     """
     
     def __init__(
-        self,
-        chat_service: ChatService,
+        self, 
+        chat_service,
         tool_registry: Optional[ToolRegistry] = None,
-        debug: bool = False
+        loop_detector: Optional[LoopDetector] = None
     ):
         """
         Initialize a Turn.
         
         Args:
             chat_service: The ChatService instance
-            tool_registry: Optional ToolRegistry for function schemas
-            debug: Whether to emit debug events
+            tool_registry: Optional tool registry for function schemas
+            loop_detector: Optional loop detector to prevent infinite loops
         """
         self.chat_service = chat_service
         self.tool_registry = tool_registry
-        self.debug = debug
+        self.loop_detector = loop_detector
         
         # State tracking
         self.accumulated_content = ""
@@ -68,7 +70,7 @@ class Turn:
         messages: List[Dict[str, Any]],
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None
-    ) -> AsyncIterator[TurnEvent]:
+    ) -> AsyncGenerator[TurnEvent, None]:
         """
         Execute the turn and yield events.
         
@@ -149,28 +151,29 @@ class Turn:
             
             # Yield tool call requests if any
             if self.accumulated_tool_calls:
-                tool_calls = []
-                for tool_data in self.accumulated_tool_calls.values():
-                    if tool_data.get("id") and tool_data.get("function", {}).get("name"):
+                # Yield tool call requests
+                for tool_info in self.accumulated_tool_calls:
+                    # Check for loops if detector is available
+                    if self.loop_detector:
                         try:
-                            arguments = json.loads(
-                                tool_data.get("function", {}).get("arguments", "{}")
-                            )
-                            tool_calls.append(ToolCallInfo(
-                                id=tool_data["id"],
-                                name=tool_data["function"]["name"],
-                                arguments=arguments
-                            ))
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Failed to parse tool arguments: {e}")
+                            args = json.loads(tool_info.arguments) if tool_info.arguments else {}
+                        except json.JSONDecodeError:
+                            args = {"raw": tool_info.arguments}
+                        
+                        if self.loop_detector.check_tool_call(tool_info.function_name, args):
+                            # Loop detected, yield error instead of tool call
                             yield ErrorEvent(
-                                error_type="ToolArgumentParseError",
-                                error_message=str(e),
-                                recoverable=True
+                                error=f"Loop detected: {tool_info.function_name} has been called "
+                                      f"too many times with the same arguments. "
+                                      f"{self.loop_detector.get_call_summary()}"
                             )
-                
-                if tool_calls:
-                    yield ToolCallRequestEvent(tool_calls=tool_calls)
+                            continue
+                    
+                    yield ToolCallRequestEvent(
+                        tool_call_id=tool_info.id,
+                        function_name=tool_info.function_name,
+                        arguments=tool_info.arguments
+                    )
             
             # Track total tokens and execution time
             if usage:
@@ -259,26 +262,25 @@ class Turn:
 
 
 class SyncTurn:
-    """
-    Synchronous version of Turn for non-async contexts.
-    
-    This is a simplified version that doesn't support streaming.
-    """
+    """Synchronous version of Turn for non-async contexts."""
     
     def __init__(
-        self,
-        chat_service: ChatService,
-        tool_registry: Optional[ToolRegistry] = None
+        self, 
+        chat_service,
+        tool_registry: Optional[ToolRegistry] = None,
+        loop_detector: Optional[LoopDetector] = None
     ):
         """
         Initialize a synchronous Turn.
         
         Args:
             chat_service: The ChatService instance
-            tool_registry: Optional ToolRegistry for function schemas
+            tool_registry: Optional tool registry for function schemas
+            loop_detector: Optional loop detector to prevent infinite loops
         """
         self.chat_service = chat_service
         self.tool_registry = tool_registry
+        self.loop_detector = loop_detector
     
     def run(
         self,
