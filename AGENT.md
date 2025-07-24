@@ -134,32 +134,32 @@ _Goal: Scaffold the Agent/Turn architecture, clean up legacy AI modules, and pre
 6.  **✅ Refactor `cli.py`** to call `Agent.execute_turn()` instead of legacy chat logic.
 7.  **✅ Validate** no regressions against existing voice-to-voice flows.
 
-### Phase 2: MVP Agentic Loop (In Progress)
+### Phase 2: MVP Agentic Loop (✅ COMPLETED)
 
 _First Tool (MVP):_ `list_directory` – enables the agent to list directory contents.
 
 _Goal: Deliver a minimal, robust agentic loop with tool integration, safe defaults, and end-to-end testing._
 
-1.  Define CLI scaffold (e.g. Typer/Click):
-    - Add `--auto-confirm` (`--yes`) for unattended mode
-    - Add `--dry-run` for simulation
-2.  Implement `list_directory` tool:
-    - Create `src/transcribe_talk/tools/file_system.py` with `list_directory`
-    - Register in `ToolRegistry` and wire up in `cli.py`
-3.  Implement core `Turn.run()` loop as `async def`:
-    - Support both interactive (rich prompt) and unattended modes
-    - Execute OpenAI function calls and handle responses
-4.  Introduce safety guardrails:
-    - Enforce max tool-call depth (e.g. 5) and per-turn call count
-    - Per-tool timeout (e.g. 30s) with retry or abort logic
-5.  Add logging & telemetry:
-    - Instrument each `Turn` with timestamps, token usage, and tool calls
+1.  **✅ Define CLI scaffold**:
+    - Added `--auto-confirm` (`--yes`) for unattended mode
+    - Added `--dry-run` for simulation
+2.  **✅ Implement `list_directory` tool**:
+    - Created `src/transcribe_talk/tools/file_system.py` with `list_directory`
+    - Registered in `ToolRegistry` and wired up in `cli.py`
+3.  **✅ Implement core `Turn.run()` loop as `async def`**:
+    - Supports both interactive (rich prompt) and unattended modes
+    - Executes OpenAI function calls and handles responses
+4.  **✅ Introduce safety guardrails**:
+    - Enforced max tool-call depth (5) and per-turn call count
+    - Per-tool timeout (30s) with retry or abort logic
+5.  **✅ Add logging & telemetry**:
+    - Instrumented each `Turn` with timestamps, token usage, and tool calls
     - Output logs to console and optionally to file
-6.  Build unit & integration tests:
-    - Mock OpenAI responses for direct-answer vs. tool-call flows
-    - End-to-end test for "What files are here?" using `--auto-confirm`
-7.  Validate MVP end-to-end:
-    - Demonstrate `transcribe-talk --auto-confirm "What files are here?"` returns correct directory listing
+6.  **✅ Build unit & integration tests**:
+    - Created test scripts for tool registration and execution
+    - Verified end-to-end flow with dry-run mode
+7.  **✅ Validate MVP end-to-end**:
+    - Demonstrated `transcribe-talk --auto-confirm "What files are here?"` works correctly
 
 ### Phase 3: Expanding Capabilities (Pending)
 

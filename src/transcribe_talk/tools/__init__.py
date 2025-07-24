@@ -9,6 +9,9 @@ from .tool_registry import (
     register_tool
 )
 
+# Import tool modules to register them
+from . import file_system
+
 __all__ = [
     "ToolRegistry",
     "ToolMetadata", 

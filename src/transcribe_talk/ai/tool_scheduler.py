@@ -78,7 +78,8 @@ class ToolScheduler:
         tool_registry: ToolRegistry,
         approval_mode: ApprovalMode = ApprovalMode.SMART,
         default_timeout: float = 30.0,
-        max_workers: int = 4
+        max_workers: int = 4,
+        dry_run: bool = False
     ):
         """
         Initialize the ToolScheduler.
@@ -88,16 +89,18 @@ class ToolScheduler:
             approval_mode: How to handle tool approvals
             default_timeout: Default timeout for tool execution
             max_workers: Maximum concurrent tool executions
+            dry_run: If True, simulate tool execution without running
         """
         self.tool_registry = tool_registry
         self.approval_mode = approval_mode
         self.default_timeout = default_timeout
+        self.dry_run = dry_run
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._tool_calls: Dict[str, ToolCall] = {}
         
         logger.info(
             f"ToolScheduler initialized (approval={approval_mode.value}, "
-            f"timeout={default_timeout}s, workers={max_workers})"
+            f"timeout={default_timeout}s, workers={max_workers}, dry_run={dry_run})"
         )
     
     async def execute_tool_calls(
@@ -170,12 +173,20 @@ class ToolScheduler:
             # Determine timeout
             timeout = tool_metadata.timeout_seconds or self.default_timeout
             
-            # Execute with timeout
-            result = await self._execute_with_timeout(
-                tool_func,
-                info.arguments,
-                timeout
-            )
+            # Execute with timeout or simulate in dry-run mode
+            if self.dry_run:
+                # Simulate execution
+                logger.info(f"[DRY-RUN] Would execute tool: {info.name} with args: {info.arguments}")
+                result = f"[DRY-RUN] Tool '{info.name}' would be executed with arguments: {info.arguments}"
+                # Simulate a small delay
+                await asyncio.sleep(0.5)
+            else:
+                # Actually execute the tool
+                result = await self._execute_with_timeout(
+                    tool_func,
+                    info.arguments,
+                    timeout
+                )
             
             # Success
             tool_call.end_time = datetime.now()

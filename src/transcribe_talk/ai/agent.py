@@ -40,7 +40,8 @@ class AgentConfig:
         max_tool_calls_per_turn: int = 5,
         max_total_tool_calls: int = 20,
         auto_confirm: bool = False,
-        debug: bool = False
+        debug: bool = False,
+        dry_run: bool = False
     ):
         """
         Initialize agent configuration.
@@ -51,12 +52,14 @@ class AgentConfig:
             max_total_tool_calls: Maximum total tool calls in conversation
             auto_confirm: Whether to auto-confirm tool executions
             debug: Whether to enable debug mode
+            dry_run: Whether to simulate tool executions
         """
         self.max_turns = max_turns
         self.max_tool_calls_per_turn = max_tool_calls_per_turn
         self.max_total_tool_calls = max_total_tool_calls
         self.auto_confirm = auto_confirm
         self.debug = debug
+        self.dry_run = dry_run
 
 
 class Agent:
@@ -101,7 +104,8 @@ class Agent:
             approval_mode = ApprovalMode.NEVER if self.config.auto_confirm else ApprovalMode.SMART
             self.tool_scheduler = ToolScheduler(
                 tool_registry=tool_registry,
-                approval_mode=approval_mode
+                approval_mode=approval_mode,
+                dry_run=self.config.dry_run
             )
         else:
             self.tool_scheduler = None

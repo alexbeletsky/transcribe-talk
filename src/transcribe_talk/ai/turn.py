@@ -58,6 +58,11 @@ class Turn:
         self.accumulated_tool_calls: Dict[int, Dict[str, Any]] = {}
         self.debug_responses: List[Any] = []
         
+        # Telemetry
+        self.start_time: Optional[datetime] = None
+        self.end_time: Optional[datetime] = None
+        self.total_tokens: int = 0
+        
     async def run(
         self,
         messages: List[Dict[str, Any]],
@@ -76,6 +81,9 @@ class Turn:
             TurnEvent objects
         """
         try:
+            self.start_time = datetime.now()
+            logger.info(f"Starting turn with {len(messages)} messages")
+            
             # Get function schemas if tool registry provided
             functions = None
             if self.tool_registry:
@@ -84,6 +92,7 @@ class Turn:
                     yield DebugEvent(
                         message=f"Available tools: {[f['name'] for f in functions]}"
                     )
+                logger.debug(f"Registered {len(functions) if functions else 0} tools")
             
             # Send to ChatService
             stream = await self.chat_service.send_message_async(
@@ -162,6 +171,19 @@ class Turn:
                 
                 if tool_calls:
                     yield ToolCallRequestEvent(tool_calls=tool_calls)
+            
+            # Track total tokens and execution time
+            if usage:
+                self.total_tokens = usage.get('total_tokens', 0)
+            
+            self.end_time = datetime.now()
+            duration = (self.end_time - self.start_time).total_seconds() if self.start_time else 0
+            
+            logger.info(
+                f"Turn completed in {duration:.2f}s, "
+                f"tokens: {self.total_tokens}, "
+                f"tool calls: {len(self.accumulated_tool_calls)}"
+            )
             
             # Yield finished event
             yield FinishedEvent(

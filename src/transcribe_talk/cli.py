@@ -116,10 +116,12 @@ def handle_exceptions(func):
 class InteractiveSession:
     """Manages an interactive voice conversation session."""
     
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, auto_confirm: bool = False, dry_run: bool = False):
         """Initialize the interactive session with all components."""
         self.settings = settings
         self.running = False
+        self.auto_confirm = auto_confirm
+        self.dry_run = dry_run
         
         # Initialize components
         self.recorder = AudioRecorder(settings.audio)
@@ -131,8 +133,9 @@ class InteractiveSession:
         agent_config = AgentConfig(
             max_turns=20,
             max_tool_calls_per_turn=5,
-            auto_confirm=False,
-            debug=False
+            auto_confirm=auto_confirm,
+            debug=False,
+            dry_run=dry_run
         )
         self.agent = Agent(
             settings=settings,
@@ -144,6 +147,10 @@ class InteractiveSession:
         signal.signal(signal.SIGINT, self._signal_handler)
         
         console.print("[green]✓[/green] All components initialized successfully")
+        if auto_confirm:
+            console.print("[yellow]⚡ Auto-confirm mode enabled[/yellow]")
+        if dry_run:
+            console.print("[yellow]🧪 Dry-run mode enabled[/yellow]")
     
     def _signal_handler(self, signum, frame):
         """Handle interrupt signal."""
@@ -386,32 +393,31 @@ class InteractiveSession:
 
 # Make interactive mode available as both a command and the default
 def start_interactive_mode(ctx: click.Context, model: str, voice: Optional[str], tokens: int) -> None:
-    """Start interactive voice conversation mode."""
-    console.print("[bold blue]TranscribeTalk Interactive Mode[/bold blue]")
-    console.print("[dim]Loading components...[/dim]\n")
-    
+    """Start interactive conversation mode."""
     # Load settings
     try:
         settings = get_settings()
         ctx.obj['settings'] = settings
+        
+        # Override settings with CLI options
+        if model:
+            settings.whisper.model = model
+        if voice:
+            settings.elevenlabs.voice_id = voice
+        if tokens:
+            settings.openai.max_tokens = tokens
+            
     except Exception as e:
         console.print(f"[red]Configuration error: {str(e)}[/red]")
         console.print("\n[dim]Please check your .env file or environment variables.[/dim]")
         sys.exit(1)
     
-    # Update settings with command line options
-    settings.whisper.model = model
-    if voice:
-        settings.elevenlabs.voice_id = voice
-    settings.openai.max_tokens = tokens
-    
-    console.print(f"[green]✓[/green] Using Whisper model: {model}")
-    console.print(f"[green]✓[/green] Using TTS voice: {settings.elevenlabs.voice_id}")
-    console.print(f"[green]✓[/green] Max tokens: {tokens}")
-    console.print()
+    # Get options from context
+    auto_confirm = ctx.obj.get('auto_confirm', False)
+    dry_run = ctx.obj.get('dry_run', False)
     
     # Start interactive session
-    session = InteractiveSession(settings)
+    session = InteractiveSession(settings, auto_confirm=auto_confirm, dry_run=dry_run)
     session.start()
 
 
@@ -426,7 +432,7 @@ def start_interactive_mode(ctx: click.Context, model: str, voice: Optional[str],
 @click.option(
     "--log-file",
     type=click.Path(),
-    help="Log file path"
+    help="Write logs to file"
 )
 @click.option(
     "--debug",
@@ -437,11 +443,11 @@ def start_interactive_mode(ctx: click.Context, model: str, voice: Optional[str],
     "--model",
     default="base",
     type=click.Choice(["tiny", "base", "small", "medium", "large"]),
-    help="Whisper model to use for transcription"
+    help="Whisper model to use"
 )
 @click.option(
     "--voice",
-    help="ElevenLabs voice ID for TTS"
+    help="ElevenLabs voice ID"
 )
 @click.option(
     "--tokens",
@@ -449,10 +455,22 @@ def start_interactive_mode(ctx: click.Context, model: str, voice: Optional[str],
     type=int,
     help="Maximum tokens in AI response"
 )
+@click.option(
+    "--auto-confirm",
+    "--yes",
+    "-y",
+    is_flag=True,
+    help="Auto-confirm tool executions (unattended mode)"
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Simulate tool executions without actually running them"
+)
 @click.pass_context
 @handle_exceptions
 def cli(ctx: click.Context, log_level: str, log_file: Optional[str], debug: bool, 
-        model: str, voice: Optional[str], tokens: int) -> None:
+        model: str, voice: Optional[str], tokens: int, auto_confirm: bool, dry_run: bool) -> None:
     """
     TranscribeTalk - Voice-to-Voice AI Conversations
     
@@ -472,6 +490,8 @@ def cli(ctx: click.Context, log_level: str, log_file: Optional[str], debug: bool
     
     # Load settings (will be loaded when needed)
     ctx.obj['settings'] = None
+    ctx.obj['auto_confirm'] = auto_confirm
+    ctx.obj['dry_run'] = dry_run
     logging.info("CLI initialized successfully")
     
     # Set debug mode

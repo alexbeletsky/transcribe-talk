@@ -11,7 +11,7 @@ TranscribeTalk transforms your voice into AI conversations by:
 3. **Processing** with AI using OpenAI GPT models (with tool-calling capabilities)
 4. **Speaking** the response using ElevenLabs TTS
 
-### New Agentic Features (Phase 1 Complete)
+### New Agentic Features (Phase 1 & 2 Complete)
 
 TranscribeTalk now includes a foundational agentic architecture inspired by `gemini-cli`:
 
@@ -19,6 +19,9 @@ TranscribeTalk now includes a foundational agentic architecture inspired by `gem
 - **Tool integration framework** for extending AI capabilities with local environment interactions
 - **Async/await support** for improved performance and responsiveness
 - **Modular design** with clear separation between voice I/O, AI services, and tool management
+- **First tool implemented**: `list_directory` for file system exploration
+- **Safety features**: Tool approval, timeouts, and execution limits
+- **Dry-run mode**: Test tool interactions without actual execution
 
 ## 🚀 Quick Start
 
@@ -73,6 +76,12 @@ transcribe-talk
 # Interactive mode with options
 transcribe-talk --model large --voice <voice-id> --tokens 300
 
+# Interactive mode with auto-confirm (unattended mode)
+transcribe-talk --auto-confirm
+
+# Dry-run mode - simulate tool execution
+transcribe-talk --dry-run
+
 # One-shot mode - Process single audio file or recording
 transcribe-talk once
 
@@ -94,10 +103,21 @@ transcribe-talk --help
 - **Voice recording** with start/stop controls
 - **Real-time transcription** using Whisper
 - **AI conversation** with memory and context
+- **Tool-augmented responses** (e.g., "What files are in this directory?")
 - **Text-to-speech** playback of responses
 - **Text input** option for accessibility
 - **Conversation management** (clear history, help)
 - **Beautiful terminal interface** with Rich
+
+#### Tool Capabilities
+
+Currently available tools:
+- **list_directory** - List contents of directories with formatting
+
+Example queries that trigger tool use:
+- "What files are in the current directory?"
+- "Show me what's in the src folder"
+- "List all Python files here"
 
 #### One-Shot Mode Features
 
@@ -244,13 +264,15 @@ transcribe-talk --log-level DEBUG --log-file transcribe.log
 - [x] Type safety with comprehensive hints
 - [x] Modular design with clear separation of concerns
 
-**Phase 2 In Progress** 🚧 (MVP Agentic Loop)
+**Phase 2 Complete** ✅ (MVP Agentic Loop)
 
-- [ ] First tool implementation (list_directory)
-- [ ] Tool confirmation flow (--auto-confirm)
-- [ ] Safety guardrails (timeouts, retry logic)
-- [ ] Telemetry and logging enhancements
-- [ ] End-to-end testing framework
+- [x] First tool implementation (list_directory)
+- [x] Tool confirmation flow (--auto-confirm)
+- [x] Dry-run mode (--dry-run)
+- [x] Safety guardrails (timeouts, retry logic)
+- [x] Telemetry and logging enhancements
+- [x] Basic testing framework
+- [x] End-to-end tool execution flow
 
 **Phase 3 Planned** 📋 (Expanding Capabilities)
 
