@@ -161,13 +161,19 @@ _Goal: Deliver a minimal, robust agentic loop with tool integration, safe defaul
 7.  **✅ Validate MVP end-to-end**:
     - Demonstrated `transcribe-talk --auto-confirm "What files are here?"` works correctly
 
-### Phase 3: Expanding Capabilities (Pending)
+### Phase 3: Expanding Capabilities (✅ COMPLETED)
 
 _Goal: Make the agent more powerful and intelligent._
 
-1.  **Add More Tools:** Implement `read_file` and `write_file` (with robust confirmation).
-2.  **Implement Long-Term Memory:** Add support for `CONTEXT.md` to the `PromptEngine`.
-3.  **Implement `save_memory` Tool:** Create a tool that allows the agent to write to `CONTEXT.md`.
+1.  **✅ Add More Tools:** Implemented `read_file` and `write_file` (with robust confirmation).
+    - `read_file`: Read text files with preview mode for large files
+    - `write_file`: Write/create files with overwrite/append modes and directory creation
+2.  **✅ Implement Long-Term Memory:** Added support for `CONTEXT.md` to the `PromptEngine`.
+    - PromptEngine automatically loads and includes CONTEXT.md in system prompt
+    - Long-term memory is seamlessly integrated into conversation context
+3.  **✅ Implement `save_memory` Tool:** Created tools that allow the agent to read/write to `CONTEXT.md`.
+    - `save_memory`: Save categorized memories with tags and timestamps
+    - `read_memory`: Read memories with optional filtering by category
 
 ### Phase 4: Advanced Hardening (Pending)
 

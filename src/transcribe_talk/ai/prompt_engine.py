@@ -79,6 +79,13 @@ class PromptEngine:
         # Gather context components
         context_parts = []
         
+        # Add long-term memory if available
+        long_term_memory = self.load_long_term_memory()
+        if long_term_memory:
+            context_parts.append("Long-term Memory:")
+            context_parts.append(long_term_memory)
+            context_parts.append("")
+        
         # Add environmental context if requested
         if include_env:
             env_context = self._get_environmental_context()
@@ -195,12 +202,6 @@ class PromptEngine:
             context_parts.append("Project files found:")
             for file in sorted(project_files)[:10]:  # Limit to first 10
                 context_parts.append(f"  - {file.name}")
-        
-        # Check for CONTEXT.md (future long-term memory)
-        context_file = self.workspace_path / "CONTEXT.md"
-        if context_file.exists():
-            context_parts.append("\nLong-term memory available (CONTEXT.md)")
-            # In the future, we'll read and include this content
         
         return "\n".join(context_parts)
     

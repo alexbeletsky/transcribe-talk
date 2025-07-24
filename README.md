@@ -11,15 +11,16 @@ TranscribeTalk transforms your voice into AI conversations by:
 3. **Processing** with AI using OpenAI GPT models (with tool-calling capabilities)
 4. **Speaking** the response using ElevenLabs TTS
 
-### New Agentic Features (Phase 1 & 2 Complete)
+### New Agentic Features (Phases 1-3 Complete)
 
-TranscribeTalk now includes a foundational agentic architecture inspired by `gemini-cli`:
+TranscribeTalk now includes a comprehensive agentic architecture inspired by `gemini-cli`:
 
 - **Event-driven architecture** with structured events for better separation of concerns
 - **Tool integration framework** for extending AI capabilities with local environment interactions
 - **Async/await support** for improved performance and responsiveness
 - **Modular design** with clear separation between voice I/O, AI services, and tool management
-- **First tool implemented**: `list_directory` for file system exploration
+- **File system tools**: Browse, read, and write files with safety checks
+- **Long-term memory**: Persistent context across conversations
 - **Safety features**: Tool approval, timeouts, and execution limits
 - **Dry-run mode**: Test tool interactions without actual execution
 
@@ -112,12 +113,22 @@ transcribe-talk --help
 #### Tool Capabilities
 
 Currently available tools:
+
+**File System Tools:**
 - **list_directory** - List contents of directories with formatting
+- **read_file** - Read text files with preview mode for large files
+- **write_file** - Create or modify text files with safety confirmations
+
+**Memory Tools:**
+- **save_memory** - Save important information to long-term memory
+- **read_memory** - Retrieve saved memories with filtering options
 
 Example queries that trigger tool use:
 - "What files are in the current directory?"
-- "Show me what's in the src folder"
-- "List all Python files here"
+- "Read the README.md file"
+- "Create a new file called notes.txt with my meeting notes"
+- "Remember that I prefer dark mode interfaces"
+- "What do you remember about my preferences?"
 
 #### One-Shot Mode Features
 
@@ -274,12 +285,14 @@ transcribe-talk --log-level DEBUG --log-file transcribe.log
 - [x] Basic testing framework
 - [x] End-to-end tool execution flow
 
-**Phase 3 Planned** 📋 (Expanding Capabilities)
+**Phase 3 Complete** ✅ (Expanding Capabilities)
 
-- [ ] Additional tools (read_file, write_file)
-- [ ] Long-term memory with CONTEXT.md
-- [ ] Memory management tools
-- [ ] Enhanced prompt engineering
+- [x] Additional tools (read_file, write_file)
+- [x] Long-term memory with CONTEXT.md
+- [x] Memory management tools (save_memory, read_memory)
+- [x] Enhanced prompt engineering with memory integration
+- [x] Categorized memory storage with tags
+- [x] Memory filtering and retrieval
 
 **Phase 4 Planned** 📋 (Advanced Hardening)
 

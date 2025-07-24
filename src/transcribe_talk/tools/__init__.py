@@ -11,6 +11,7 @@ from .tool_registry import (
 
 # Import tool modules to register them
 from . import file_system
+from . import memory
 
 __all__ = [
     "ToolRegistry",
