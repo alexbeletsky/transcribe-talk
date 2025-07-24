@@ -99,6 +99,16 @@ class ConversationHistory:
         
         logger.info(f"ConversationHistory initialized (max_messages={max_messages}, max_tokens={max_tokens})")
     
+    @property
+    def messages(self) -> List[Message]:
+        """
+        Get the list of messages in the conversation.
+        
+        Returns:
+            List of messages
+        """
+        return self._messages.copy()
+    
     def set_system_prompt(self, prompt: str) -> None:
         """
         Set the system prompt for the conversation.

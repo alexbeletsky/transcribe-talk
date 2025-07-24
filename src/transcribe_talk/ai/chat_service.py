@@ -122,6 +122,10 @@ class ChatService:
             "stream": stream
         }
         
+        # Add stream options to include usage data if streaming
+        if stream:
+            params["stream_options"] = {"include_usage": True}
+        
         # Add functions if provided
         if functions:
             params["tools"] = [{"type": "function", "function": f} for f in functions]
@@ -176,6 +180,10 @@ class ChatService:
             "max_tokens": max_tokens or self.config.max_tokens,
             "stream": stream
         }
+        
+        # Add stream options to include usage data if streaming
+        if stream:
+            params["stream_options"] = {"include_usage": True}
         
         # Add functions if provided
         if functions:

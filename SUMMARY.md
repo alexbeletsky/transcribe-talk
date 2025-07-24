@@ -51,29 +51,34 @@ src/transcribe_talk/
 #### Phase 1: Foundational Components
 
 1. **Agent** (`ai/agent.py`)
+
    - Central orchestrator managing all components
    - Handles conversation lifecycle
    - Enforces safety limits (turn count, tool calls)
    - Manages chat compression and loop detection
 
 2. **Turn** (`ai/turn.py`)
+
    - Encapsulates a single interaction cycle
    - Processes streamed LLM responses
    - Yields structured events
    - Integrates loop detection
 
 3. **Events** (`ai/events.py`)
+
    - Event-driven communication system
    - Types: ContentEvent, ToolCallRequestEvent, FinishedEvent, ErrorEvent, etc.
    - Decouples components for better modularity
 
 4. **ChatService** (`ai/chat_service.py`)
+
    - Manages OpenAI API interactions
    - Supports streaming and non-streaming modes
    - Implements retry logic and telemetry
    - Tracks token usage and costs
 
 5. **ConversationHistory** (`ai/history.py`)
+
    - Manages conversation messages
    - Token counting and limits
    - Import/export functionality
@@ -88,12 +93,14 @@ src/transcribe_talk/
 #### Phase 2: Tool System
 
 1. **ToolRegistry** (`tools/tool_registry.py`)
+
    - Central registry for all tools
    - Generates OpenAI function schemas
    - Categorizes tools (FILE_SYSTEM, MEMORY, etc.)
    - Type-safe parameter definitions
 
 2. **ToolScheduler** (`ai/tool_scheduler.py`)
+
    - Manages tool execution lifecycle
    - Implements approval flows (NEVER, SMART, ALWAYS)
    - Supports dry-run mode
@@ -105,10 +112,12 @@ src/transcribe_talk/
 #### Phase 3: Expanded Capabilities
 
 1. **File System Tools** (`tools/file_system.py`)
+
    - `read_file`: Reads text files with preview mode
    - `write_file`: Creates/modifies files with safety checks
 
 2. **Memory Tools** (`tools/memory.py`)
+
    - `save_memory`: Saves categorized information to CONTEXT.md
    - `read_memory`: Retrieves memories with filtering
 
@@ -120,6 +129,7 @@ src/transcribe_talk/
 #### Phase 4: Advanced Hardening
 
 1. **LoopDetector** (`ai/loop_detector.py`)
+
    - Tracks tool calls to prevent infinite loops
    - Time-window based detection
    - Configurable thresholds
@@ -134,17 +144,20 @@ src/transcribe_talk/
 ### 3. Key Integration Points
 
 #### CLI Integration (`cli.py`)
+
 - Refactored to use Agent instead of direct AI calls
 - Added `--auto-confirm` flag for tool approval
 - Added `--dry-run` flag for testing
 - Updated both interactive and one-shot modes
 
 #### Configuration Updates (`config/settings.py`)
+
 - Added OpenAI timeout and retry settings
 - Extended WhisperConfig with language and task options
 - Added validators for configuration values
 
 #### Audio Player Updates (`audio/player.py`)
+
 - Generic `play()` method supporting bytes and numpy arrays
 - Fixed WAV file reading to use scipy
 - Unified interface for TTS output
@@ -152,17 +165,20 @@ src/transcribe_talk/
 ## Safety Features Implemented
 
 1. **Tool Approval System**
+
    - Three modes: NEVER, SMART, ALWAYS
    - CLI flag `--auto-confirm` for automation
    - Clear user prompts with tool details
 
 2. **Execution Limits**
+
    - Max turns per conversation (default: 20)
    - Max tool calls per turn (default: 5)
    - Total tool call limit (default: 50)
    - Per-tool timeout (default: 30s)
 
 3. **Loop Prevention**
+
    - Detects repeated tool calls with same arguments
    - Configurable detection window and threshold
    - Automatic loop breaking with error reporting
@@ -183,6 +199,7 @@ src/transcribe_talk/
 5. **test_phase4_simple.py** - Simplified logic tests
 
 These test scripts verify:
+
 - Component initialization
 - Event flow
 - Tool registration and execution
@@ -192,6 +209,7 @@ These test scripts verify:
 ### Preserved Test Scripts
 
 All test scripts have been preserved in `tests/implementation_verification/` for future reference and regression testing. These scripts serve as:
+
 - Documentation of what was built in each phase
 - Examples of how to use the new components
 - Verification tools for future development
@@ -207,6 +225,7 @@ Each test script is self-contained and can be run independently to verify specif
 ## Migration Notes
 
 1. **Legacy Code Preservation**
+
    - Original AI modules moved to `ai/ai_legacy/`
    - No breaking changes to existing functionality
    - Smooth migration path for future updates
@@ -219,11 +238,13 @@ Each test script is self-contained and can be run independently to verify specif
 ## Performance Improvements
 
 1. **Async/Await Throughout**
+
    - Non-blocking I/O operations
    - Concurrent tool execution capability
    - Responsive user experience
 
 2. **Streaming Support**
+
    - Real-time response generation
    - Lower latency for voice interactions
    - Memory-efficient processing
@@ -236,6 +257,7 @@ Each test script is self-contained and can be run independently to verify specif
 ## Documentation Updates
 
 1. **README.md**
+
    - Added comprehensive architecture diagram
    - Updated feature list
    - New usage examples
@@ -250,6 +272,7 @@ Each test script is self-contained and can be run independently to verify specif
 ## Future Extensibility
 
 The architecture now supports:
+
 1. Easy addition of new tools
 2. Custom tool categories
 3. Plugin architecture potential
@@ -257,8 +280,47 @@ The architecture now supports:
 5. Advanced memory systems
 6. Conversation branching
 
+## Post-Implementation Fixes
+
+### Content Duplication Bug (Resolved)
+
+**Issue Identified**: During testing, audio responses were heard twice due to content duplication in the TTS pipeline.
+
+**Root Cause**: The `Turn` class was yielding content events twice:
+
+1. Streaming `ContentEvent`s as chunks arrived from OpenAI (correct behavior)
+2. Final `ContentEvent` with complete accumulated content (redundant)
+
+**Pipeline Analysis**:
+
+```
+Turn.run() → ContentEvents (streaming) → Agent → CLI → TTS
+```
+
+The CLI was accumulating both the streaming chunks AND the final complete content, resulting in duplicated text being sent to TTS synthesis.
+
+**Fix Applied**:
+
+- Removed redundant final `ContentEvent` emission in `Turn.run()`
+- Content is now properly streamed once via partial `ContentEvent`s
+- Agent and CLI accumulate streaming content correctly
+- TTS receives single, non-duplicated content
+
+**Files Modified**:
+
+- `src/transcribe_talk/ai/turn.py`: Removed lines 145-149 that yielded final content
+- Added detailed logging for debugging in `src/transcribe_talk/cli.py` and `src/transcribe_talk/audio/player.py`
+
+**Verification**:
+
+- Audio responses now play once as intended
+- Content streaming still works correctly for real-time display
+- Pipeline follows architecture as specified in AGENT.md
+
+This fix ensures the implementation correctly follows the event-driven architecture where Turn is responsible for "Event Generation" without duplication, maintaining the single-responsibility principle outlined in the architectural documentation.
+
 ## Conclusion
 
 The TranscribeTalk project has been successfully transformed into a powerful agentic AI system while maintaining its core voice-to-voice functionality. The implementation follows industry best practices, ensures safety and reliability, and provides a solid foundation for future enhancements.
 
-The modular architecture, comprehensive safety features, and extensive testing make this a production-ready system capable of handling complex conversational AI scenarios with tool integration.
+The modular architecture, comprehensive safety features, extensive testing, and post-implementation debugging make this a production-ready system capable of handling complex conversational AI scenarios with tool integration.

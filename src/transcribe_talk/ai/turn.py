@@ -41,7 +41,8 @@ class Turn:
         self, 
         chat_service,
         tool_registry: Optional[ToolRegistry] = None,
-        loop_detector: Optional[LoopDetector] = None
+        loop_detector: Optional[LoopDetector] = None,
+        debug: bool = False
     ):
         """
         Initialize a Turn.
@@ -50,10 +51,12 @@ class Turn:
             chat_service: The ChatService instance
             tool_registry: Optional tool registry for function schemas
             loop_detector: Optional loop detector to prevent infinite loops
+            debug: Whether to enable debug mode
         """
         self.chat_service = chat_service
         self.tool_registry = tool_registry
         self.loop_detector = loop_detector
+        self.debug = debug
         
         # State tracking
         self.accumulated_content = ""
@@ -113,6 +116,16 @@ class Turn:
                 if self.debug:
                     self.debug_responses.append(chunk)
                 
+                # Handle final chunk with usage data (empty choices)
+                if not chunk.choices and chunk.usage:
+                    usage = {
+                        "prompt_tokens": chunk.usage.prompt_tokens,
+                        "completion_tokens": chunk.usage.completion_tokens,
+                        "total_tokens": chunk.usage.total_tokens
+                    }
+                    logger.debug(f"📊 FINAL USAGE DATA: {usage}")
+                    continue
+                
                 # Process each choice in the chunk
                 for choice in chunk.choices:
                     delta = choice.delta
@@ -141,13 +154,12 @@ class Turn:
                         "completion_tokens": chunk.usage.completion_tokens,
                         "total_tokens": chunk.usage.total_tokens
                     }
+                    logger.debug(f"📊 TOKEN USAGE: {usage}")
+                else:
+                    logger.debug("📊 No usage data in this chunk")
             
-            # Yield final content if any accumulated
-            if self.accumulated_content and not self.accumulated_tool_calls:
-                yield ContentEvent(
-                    content=self.accumulated_content,
-                    is_partial=False
-                )
+            # Note: We don't yield final content here because it was already streamed
+            # The accumulated_content is used internally for conversation history
             
             # Yield tool call requests if any
             if self.accumulated_tool_calls:

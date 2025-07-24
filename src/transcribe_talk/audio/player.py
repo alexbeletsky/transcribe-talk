@@ -19,6 +19,19 @@ import numpy as np
 import scipy.io.wavfile
 import sounddevice as sd
 
+# Try to import additional audio libraries for better format support
+try:
+    import librosa
+    HAS_LIBROSA = True
+except ImportError:
+    HAS_LIBROSA = False
+
+try:
+    import soundfile as sf
+    HAS_SOUNDFILE = True
+except ImportError:
+    HAS_SOUNDFILE = False
+
 from ..config.settings import AudioConfig
 
 logger = logging.getLogger(__name__)
@@ -58,7 +71,7 @@ class AudioPlayer:
         if sample_rate is None:
             sample_rate = self.sample_rate
         
-        logger.info(f"Playing audio array: {len(audio_data)} samples at {sample_rate}Hz")
+        logger.info(f"🎵 AUDIO PLAY START: Playing audio array: {len(audio_data)} samples at {sample_rate}Hz")
         
         try:
             # Ensure correct data type
@@ -76,10 +89,11 @@ class AudioPlayer:
                 audio_data = audio_data.flatten()
             
             # Play audio (blocking)
+            logger.info("🎵 CALLING sd.play()...")
             sd.play(audio_data, samplerate=sample_rate)
+            logger.info("🎵 CALLING sd.wait()...")
             sd.wait()  # Wait for playback to complete
-            
-            logger.info("Audio playback completed")
+            logger.info("🎵 AUDIO PLAY END: Audio playback completed")
             
         except Exception as e:
             logger.error(f"Error playing audio array: {e}")
@@ -105,10 +119,39 @@ class AudioPlayer:
                 sample_rate, audio_data = scipy.io.wavfile.read(str(file_path))
                 self.play_array(audio_data, sample_rate)
             else:
-                # For other formats, try to use sounddevice directly
-                # Note: This requires libsndfile with appropriate codec support
-                audio_data, sample_rate = sd.read(str(file_path))
-                self.play_array(audio_data, sample_rate)
+                # For other formats, try multiple libraries
+                audio_data = None
+                sample_rate = None
+                
+                # Try soundfile first (supports many formats)
+                if HAS_SOUNDFILE:
+                    try:
+                        audio_data, sample_rate = sf.read(str(file_path))
+                        logger.debug(f"Loaded audio with soundfile: {sample_rate}Hz")
+                    except Exception as sf_error:
+                        logger.debug(f"Soundfile failed: {sf_error}")
+                
+                # Try librosa as fallback (good for MP3)
+                if audio_data is None and HAS_LIBROSA:
+                    try:
+                        audio_data, sample_rate = librosa.load(str(file_path), sr=None)
+                        logger.debug(f"Loaded audio with librosa: {sample_rate}Hz")
+                    except Exception as librosa_error:
+                        logger.debug(f"Librosa failed: {librosa_error}")
+                
+                # Try scipy.io.wavfile as last resort
+                if audio_data is None:
+                    try:
+                        sample_rate, audio_data = scipy.io.wavfile.read(str(file_path))
+                        logger.debug(f"Loaded audio with scipy: {sample_rate}Hz")
+                    except Exception as scipy_error:
+                        logger.error(f"All audio loading methods failed for {file_path}")
+                        raise ValueError(f"Cannot play audio file {file_path}: unsupported format")
+                
+                if audio_data is not None and sample_rate is not None:
+                    self.play_array(audio_data, sample_rate)
+                else:
+                    raise ValueError(f"Failed to load audio from {file_path}")
                 
         except Exception as e:
             logger.error(f"Error playing audio file {file_path}: {e}")

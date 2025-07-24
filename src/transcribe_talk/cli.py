@@ -32,6 +32,8 @@ from .tools import get_global_registry
 from .config.settings import get_settings, Settings
 from .utils.helpers import format_duration, truncate_text
 
+logger = logging.getLogger(__name__)
+
 # Rich console for beautiful output
 console = Console()
 
@@ -332,13 +334,17 @@ class InteractiveSession:
         """Synthesize text to speech and play it."""
         try:
             console.print("[cyan]🔊 Speaking...[/cyan]")
+            logger.info(f"🎤 TTS START: Synthesizing text: '{text[:50]}...'")
             
             # Synthesize speech
             audio_data = self.tts.synthesize(text)
+            logger.info(f"🎤 TTS COMPLETE: Got {len(audio_data) if audio_data else 0} bytes")
             
             if audio_data:
                 # Play the audio
+                logger.info("🎤 PLAYER START: Calling player.play()")
                 self.player.play(audio_data)
+                logger.info("🎤 PLAYER COMPLETE: Player.play() returned")
                 console.print("[green]✓[/green] Response played")
             else:
                 console.print("[yellow]No audio generated[/yellow]")

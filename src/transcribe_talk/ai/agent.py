@@ -110,7 +110,7 @@ class Agent:
         if tool_registry:
             approval_mode = ApprovalMode.NEVER if self.config.auto_confirm else ApprovalMode.SMART
             self.tool_scheduler = ToolScheduler(
-                registry=tool_registry,
+                tool_registry=tool_registry,
                 approval_mode=approval_mode,
                 dry_run=self.config.dry_run
             )
@@ -183,7 +183,8 @@ class Agent:
         turn = Turn(
             chat_service=self.chat_service,
             tool_registry=self.tool_registry,
-            loop_detector=self.loop_detector
+            loop_detector=self.loop_detector,
+            debug=self.config.debug
         )
         
         # Process turn events
@@ -290,7 +291,8 @@ class Agent:
         turn = Turn(
             chat_service=self.chat_service,
             tool_registry=self.tool_registry,
-            loop_detector=self.loop_detector
+            loop_detector=self.loop_detector,
+            debug=self.config.debug
         )
         
         # Process continuation
